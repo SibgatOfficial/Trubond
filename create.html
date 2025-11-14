@@ -19,10 +19,17 @@
       sizes="16x16"
       href="create/favicon-16x16.png"
     />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400&display=swap"
+      rel="stylesheet"
+    />
     <link rel="manifest" href="create/site.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Create Your Profile</title>
     <style>
+      * {
+        font-family: "Poppins", sans-serif;
+      }
       body {
         font-family: Arial, sans-serif;
         background-color: #f0f2f5;
@@ -44,6 +51,9 @@
         text-align: center;
         color: #1877f2;
       }
+      p {
+        font-size: 25px;
+      }
       .form-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -57,7 +67,7 @@
         font-weight: bold;
         display: block;
         margin-bottom: 4px;
-        font-size: 0.9rem;
+        font-size: 1rem;
       }
       input,
       textarea,
@@ -68,6 +78,7 @@
         border: 1px solid #ddd;
         border-radius: 6px;
         box-sizing: border-box;
+        font-size: 1rem;
       }
       textarea {
         height: 80px;
@@ -124,24 +135,19 @@
       <div class="form-grid">
         <div class="full-width">
           <label for="username"
-            >Unique Username (Choose it wisely because you can not change it
-            later) *</label
+            >Username ( you can not change it later ) *</label
           >
-          <input
-            type="text"
-            id="username"
-            placeholder="johndoe (no spaces, lowercase)"
-          />
+          <input type="text" id="username" ] />
           <!-- NEW: Username status holder -->
           <div id="username-status"></div>
         </div>
         <div class="full-width">
           <label for="full-name">Full Name *</label>
-          <input type="text" id="full-name" placeholder="John Doe" />
+          <input type="text" id="full-name" />
         </div>
         <div class="full-width">
-          <label for="bio">Your Bio</label>
-          <textarea id="bio" placeholder="Passionate about tech..."></textarea>
+          <label for="bio">Bio</label>
+          <textarea id="bio" placeholder="Describe yourself"></textarea>
         </div>
         <div class="full-width">
           <label for="profile-photo">Profile Photo </label>
@@ -154,7 +160,7 @@
         </div>
         <div>
           <label for="email">Email</label>
-          <input type="email" id="email" placeholder="john@email.com" />
+          <input type="email" id="email" placeholder="" />
         </div>
 
         <div>
@@ -173,12 +179,12 @@
 
         <div>
           <label for="start-year">Start Year</label>
-          <input type="number" id="start-year" placeholder="" />
+          <input type="number" id="start-year" />
         </div>
 
         <div>
           <label for="passing-year">Passing Year</label>
-          <input type="number" id="passing-year" placeholder="" />
+          <input type="number" id="passing-year" />
         </div>
 
         <div>
