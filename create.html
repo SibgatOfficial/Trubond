@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="create/apple-touch-icon.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="create/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="create/favicon-16x16.png"
+    />
+    <link rel="manifest" href="create/site.webmanifest" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create Your Profile</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f0f2f5;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 40px 20px;
+      }
+      .container {
+        max-width: 500px;
+        width: 100%;
+        margin: 0 auto;
+        padding: 24px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      }
+      h1 {
+        text-align: center;
+        color: #1877f2;
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .form-grid .full-width {
+        grid-column: 1 / -1;
+      }
+
+      label {
+        font-weight: bold;
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.9rem;
+      }
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 12px;
+        margin-bottom: 16px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        box-sizing: border-box;
+      }
+      textarea {
+        height: 80px;
+        resize: vertical;
+      }
+      button {
+        width: 100%;
+        padding: 12px;
+        background: #1877f2;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+      button:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+      }
+      button:hover:not(:disabled) {
+        background: #166fe5;
+      }
+      p#error-message {
+        color: red;
+        text-align: center;
+        font-weight: bold;
+      }
+
+      /* --- NEW STYLES for username status --- */
+      #username-status {
+        font-size: 0.85rem;
+        font-weight: bold;
+        margin-top: -12px; /* Pulls it closer to the input */
+        margin-bottom: 16px;
+        height: 1.2em;
+      }
+      .status-checking {
+        color: #6b7280;
+      }
+      .status-available {
+        color: #16a34a;
+      } /* Green */
+      .status-taken {
+        color: #ef4444;
+      } /* Red */
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Create Your Profile</h1>
+      <p>Welcome to Trubond! Let's get you set up.</p>
+      <p id="error-message"></p>
+      <div class="form-grid">
+        <div class="full-width">
+          <label for="username"
+            >Unique Username (Choose it wisely because you can not change it
+            later) *</label
+          >
+          <input
+            type="text"
+            id="username"
+            placeholder="johndoe (no spaces, lowercase)"
+          />
+          <!-- NEW: Username status holder -->
+          <div id="username-status"></div>
+        </div>
+        <div class="full-width">
+          <label for="full-name">Full Name *</label>
+          <input type="text" id="full-name" placeholder="John Doe" />
+        </div>
+        <div class="full-width">
+          <label for="bio">Your Bio</label>
+          <textarea id="bio" placeholder="Passionate about tech..."></textarea>
+        </div>
+        <div class="full-width">
+          <label for="profile-photo">Profile Photo </label>
+          <input
+            type="file"
+            id="profile-photo"
+            accept="image/*"
+            style="padding: 10px"
+          />
+        </div>
+        <div>
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="john@email.com" />
+        </div>
+
+        <div>
+          <label for="branch">Branch</label>
+          <select id="branch">
+            <option value="">Select Branch...</option>
+            <option value="CSE">Computer Science and Engineering</option>
+            <option value="CSD">Ccomputer Science and Design</option>
+            <option value="ISE">Information Science and Engineering</option>
+            <option value="ECE">Electronics</option>
+            <option value="MECH">Mechanical</option>
+            <option value="CIVIL">Civil</option>
+            <option value="EEE">Electrical</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="start-year">Start Year</label>
+          <input type="number" id="start-year" placeholder="" />
+        </div>
+
+        <div>
+          <label for="passing-year">Passing Year</label>
+          <input type="number" id="passing-year" placeholder="" />
+        </div>
+
+        <div>
+          <label for="gender">Gender</label>
+          <select id="gender">
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="dob">Date of Birth</label>
+          <input type="date" id="dob" />
+        </div>
+
+        <div class="full-width">
+          <button id="save-profile-btn">Save Profile & Enter</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+
+    <script>
+      // Your Firebase Config
+      const firebaseConfig = {
+        apiKey: "AIzaSyD0_KG4ltnJtazByZOFFoUNuV470JnLD38",
+        authDomain: "trubond-app.firebaseapp.com",
+        projectId: "trubond-app",
+        storageBucket: "trubond-app.firebasestorage.app",
+        messagingSenderId: "698788489428",
+        appId: "1:698788489428:web:8cf9c660dd8cb6ce87f341",
+      };
+
+      firebase.initializeApp(firebaseConfig);
+      const auth = firebase.auth();
+      const db = firebase.firestore();
+      const storage = firebase.storage();
+
+      // --- Get Elements ---
+      const saveBtn = document.getElementById("save-profile-btn");
+      const errorMessage = document.getElementById("error-message");
+      const usernameInput = document.getElementById("username");
+      const usernameStatus = document.getElementById("username-status");
+      const fullNameInput = document.getElementById("full-name");
+
+      let currentUser;
+
+      // --- NEW: Username check state ---
+      let debounceTimer;
+      let isUsernameAvailable = false;
+      // --- Start with save button disabled ---
+      saveBtn.disabled = true;
+      // --- AUTH GUARD for this page ---
+      auth.onAuthStateChanged((user) => {
+        if (user) {
+          console.log("User found:", user.uid);
+          currentUser = user;
+        } else {
+          console.log("No user, redirecting to index.html");
+          window.location.href = "index.html"; // Redirect to index.html
+        }
+      });
+      // --- NEW: Real-time validation ---
+      // 1. Listen for typing in username input
+      usernameInput.addEventListener("input", (e) => {
+        clearTimeout(debounceTimer); // Reset timer
+        isUsernameAvailable = false; // Reset availability
+        validateForm(); // Disable button
+        const username = e.target.value.toLowerCase().trim();
+        // Basic validation
+        if (username.length < 3) {
+          usernameStatus.innerText = "Must be at least 3 characters.";
+          usernameStatus.className = "status-taken";
+          return;
+        }
+        if (/\s/.test(username)) {
+          usernameStatus.innerText = "Username cannot contain spaces.";
+          usernameStatus.className = "status-taken";
+          return;
+        }
+        if (username.includes("sibgat")) {
+          usernameStatus.innerText = "You can not use the developer name.";
+          usernameStatus.className = "status-taken";
+          return;
+        }
+        // Show checking message and start timer
+        usernameStatus.innerText = "Checking...";
+        usernameStatus.className = "status-checking";
+        debounceTimer = setTimeout(() => {
+          checkUsernameAvailability(username);
+        }, 500); // Wait 500ms after user stops typing
+      });
+      // 2. Listen for typing in full name input
+      fullNameInput.addEventListener("input", validateForm);
+      // 3. Function to check Firestore
+      async function checkUsernameAvailability(username) {
+        if (!username) return;
+        try {
+          const docRef = db.collection("usernames").doc(username);
+          const doc = await docRef.get();
+          if (doc.exists) {
+            usernameStatus.innerText = "❌ Username taken. Try another.";
+            usernameStatus.className = "status-taken";
+            isUsernameAvailable = false;
+          } else {
+            usernameStatus.innerText = "✅ Username available!";
+            usernameStatus.className = "status-available";
+            isUsernameAvailable = true;
+          }
+        } catch (error) {
+          console.error("Error checking username:", error);
+          usernameStatus.innerText = "Error checking. Try again.";
+          usernameStatus.className = "status-taken";
+          isUsernameAvailable = false;
+        }
+        validateForm(); // Re-check if button can be enabled
+      }
+      // 4. Function to enable/disable save button
+      function validateForm() {
+        const isFullNameValid = fullNameInput.value.trim() !== "";
+        if (isUsernameAvailable && isFullNameValid) {
+          saveBtn.disabled = false;
+        } else {
+          saveBtn.disabled = true;
+        }
+      }
+      // --- Save Profile Button ---
+      saveBtn.addEventListener("click", async () => {
+        if (!currentUser) return;
+        // Final check (should be covered by disabled button)
+        if (!isUsernameAvailable) {
+          errorMessage.innerText = "Username is not available.";
+          return;
+        }
+        // 1. Get Form Data
+        const username = usernameInput.value.toLowerCase().trim();
+        const fullName = fullNameInput.value;
+        const file = document.getElementById("profile-photo").files[0];
+        saveBtn.disabled = true;
+        saveBtn.innerText = "Saving...";
+        errorMessage.innerText = "";
+        try {
+          // NOTE: We removed the duplicate username check from here
+          // because it's already done in real-time.
+          // 4. Upload photo (if one exists)
+          let photoURL = "https://placehold.co/400x400/EBF4FF/76A9FA?text=User"; // Default avatar
+          if (file) {
+            errorMessage.innerText = "Uploading photo...";
+            const storageRef = storage.ref(
+              `profile_photos/${currentUser.uid}/${file.name}`
+            );
+            const snapshot = await storageRef.put(file);
+            photoURL = await snapshot.ref.getDownloadURL();
+            console.log("Photo uploaded:", photoURL);
+          }
+          // 5. Prepare data and save to Firestore
+          errorMessage.innerText = "Saving profile...";
+          const userProfileData = {
+            username: username.toLowerCase(),
+            name: fullName,
+            email: document.getElementById("email").value,
+            about: document.getElementById("bio").value,
+            profilePhotoUrl: photoURL,
+            branch: document.getElementById("branch").value,
+            startYear:
+              document.getElementById("start-year").valueAsNumber || null,
+            passingYear:
+              document.getElementById("passing-year").valueAsNumber || null,
+            gender: document.getElementById("gender").value,
+            dob: document.getElementById("dob").value,
+            phone: currentUser.phoneNumber, // Save their phone number
+            createdAt: new Date().toISOString(),
+            // Initialize stats
+            followingCount: 0,
+            followerCount: 0,
+            postCount: 0,
+            projectsJoined: 0,
+            eventsJoined: 0,
+          };
+
+          // 6. Use a batch to save both docs at once (safer)
+          const batch = db.batch();
+
+          // Doc 1: The user's profile
+          const userDocRef = db.collection("users").doc(currentUser.uid);
+          batch.set(userDocRef, userProfileData);
+
+          // Doc 2: The unique username lock
+          const usernameDocRef = db.collection("usernames").doc(username);
+          batch.set(usernameDocRef, { userId: currentUser.uid });
+
+          await batch.commit();
+
+          console.log("Profile created!");
+
+          // 7. SUCCESS! Go to the home page.
+          window.location.href = "home.html";
+        } catch (error) {
+          console.error("Error saving profile:", error);
+          // Catch any last-second race condition
+          if (error.message.includes("Username is already taken")) {
+            errorMessage.innerText =
+              "Error: Username was just taken. Try another.";
+          } else {
+            errorMessage.innerText = error.message;
+          }
+          saveBtn.disabled = false;
+          saveBtn.innerText = "Save Profile & Enter";
+          // We must reset the state if it failed
+          isUsernameAvailable = false;
+          validateForm();
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="create/apple-touch-icon.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="create/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="create/favicon-16x16.png"
+    />
+    <link rel="manifest" href="create/site.webmanifest" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trubond - Login</title>
+    <style>
+      :root {
+        --primary-blue: #1d4ed8;
+      }
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f0f2f5;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0; /* Remove default margin */
+      }
+      .container {
+        background: #fff;
+        padding: 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        width: 320px;
+        overflow: hidden;
+      }
+      h1 {
+        font-size: 1.5rem;
+        text-align: center;
+        margin-bottom: 20px;
+        color: #1877f2;
+      }
+      label {
+        /* Add label style for clarity */
+        font-size: 0.9rem;
+        font-weight: bold;
+        display: block;
+        margin-bottom: 4px;
+      }
+      input {
+        width: 85%;
+        padding: 10px;
+        margin-bottom: 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box; /* Important */
+      }
+      button {
+        width: 100%;
+        padding: 12px;
+        background: #1877f2;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background-color 0.2s; /* Add transition */
+      }
+      button:hover {
+        background: #166fe5;
+      }
+      button:disabled {
+        /* Style for disabled button */
+        background-color: #9dbcfc;
+        cursor: not-allowed;
+      }
+
+      /* These groups will be shown/hidden by JS */
+      #otp-group,
+      #loading-group {
+        display: none;
+      }
+
+      #loading-group {
+        text-align: center;
+        padding: 20px 0;
+      }
+
+      #loading-group p {
+        font-weight: bold;
+        color: #1877f2;
+      }
+
+      #message {
+        text-align: center;
+        margin-top: 16px;
+        font-weight: bold;
+        min-height: 1.2em; /* Prevent layout shift */
+      }
+      .error {
+        color: red;
+      }
+      .success {
+        color: green;
+      }
+
+      /* Recaptcha needs some space if visible, even if invisible */
+      #recaptcha-container {
+        margin-top: 15px;
+        display: flex;
+        justify-content: center;
+      }
+      #loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--primary-blue);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+
+      .loading-content {
+        text-align: center;
+      }
+
+      .loading-content h2 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+      }
+
+      .loading-content p {
+        font-size: 1.2rem;
+        margin-bottom: 20px;
+      }
+
+      .author {
+        font-size: 1rem !important;
+        opacity: 0.8;
+      }
+
+      .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top: 4px solid white;
+        border-radius: 50%;
+        margin: 20px auto;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading-overlay">
+      <div class="loading-content">
+        <h2>Trubond</h2>
+        <p>College Networking App</p>
+        <div class="loading-spinner"></div>
+        <p class="author">By Sibgat</p>
+      </div>
+    </div>
+    <div class="container">
+      <h1 id="page-title">Trubond Login</h1>
+
+      <!-- Group 1: Phone Login -->
+      <div id="phone-group">
+        <label for="phone-number">Enter Your Phone Number </label>
+        <div class="telC">
+          <span
+            style="
+              padding: 7px;
+              border-radius: 10px;
+              background: rgb(221, 221, 221);
+            "
+            >+91</span
+          >
+          <input type="tel" id="phone-number" placeholder="" />
+        </div>
+        <button id="send-otp-btn">Send OTP</button>
+      </div>
+
+      <!-- Group 2: OTP Entry -->
+      <div id="otp-group">
+        <label for="otp-code">Enter 6-Digit OTP</label>
+        <input type="number" id="otp-code" />
+        <button id="verify-otp-btn">Verify Code</button>
+      </div>
+
+      <!-- Group 3: Loading State (Router) -->
+      <div id="loading-group">
+        <p>Logged in. Checking profile...</p>
+      </div>
+
+      <!-- reCAPTCHA container -->
+      <div id="recaptcha-container"></div>
+
+      <!-- Status Message -->
+      <p id="message"></p>
+    </div>
+
+    <!-- Firebase SDKs (Added firestore) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
+    <script>
+      // Hide loading overlay when page is ready
+      window.addEventListener("load", function () {
+        setTimeout(function () {
+          document.getElementById("loading-overlay").style.display = "none";
+        }, 2000); // Show for 2 seconds
+      });
+      // Your Firebase Config (from your previous file)
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyD0_KG4ltnJtazByZOFFoUNuV470JnLD38",
+        authDomain: "trubond-app.firebaseapp.com",
+        projectId: "trubond-app",
+        storageBucket: "trubond-app.firebasestorage.app",
+        messagingSenderId: "698788489428",
+        appId: "1:698788489428:web:8cf9c660dd8cb6ce87f341",
+      };
+
+      // Initialize Firebase
+      firebase.initializeApp(firebaseConfig);
+      const auth = firebase.auth();
+      const db = firebase.firestore(); // Initialize Firestore
+
+      // --- Get HTML Elements ---
+      const pageTitle = document.getElementById("page-title");
+      const phoneGroup = document.getElementById("phone-group");
+      const otpGroup = document.getElementById("otp-group");
+      const loadingGroup = document.getElementById("loading-group");
+      const phoneNumberInput = document.getElementById("phone-number");
+      const sendOtpBtn = document.getElementById("send-otp-btn");
+      const otpCodeInput = document.getElementById("otp-code");
+      const verifyOtpBtn = document.getElementById("verify-otp-btn");
+      const message = document.getElementById("message");
+
+      // --- Setup reCAPTCHA ---
+      // We only need to initialize reCAPTCHA if the user is NOT logged in.
+      // onAuthStateChanged will handle the main logic, including rendering recaptcha
+      // if needed.
+      function initializeRecaptcha() {
+        console.log("Initializing reCAPTCHA...");
+        window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier(
+          "recaptcha-container",
+          {
+            size: "invisible",
+            callback: (response) => {
+              // reCAPTCHA solved - this usually happens implicitly with invisible
+              console.log("reCAPTCHA verified implicitly");
+              // The button click handler will proceed now
+            },
+            "expired-callback": () => {
+              console.log("reCAPTCHA expired, please try sending OTP again.");
+              message.innerText = "reCAPTCHA expired, try sending OTP again.";
+              message.className = "error";
+              resetRecaptcha(); // Reset on expiration
+            },
+          }
+        );
+        // Render the invisible reCAPTCHA - needed for invisible type
+        window.recaptchaVerifier
+          .render()
+          .then((widgetId) => {
+            window.recaptchaWidgetId = widgetId;
+            console.log("Invisible reCAPTCHA rendered, widgetId:", widgetId);
+          })
+          .catch((error) => {
+            console.error("reCAPTCHA render failed:", error);
+            message.innerText = "Failed to load reCAPTCHA. Check console.";
+            message.className = "error";
+          });
+      }
+
+      function resetRecaptcha() {
+        try {
+          if (window.recaptchaVerifier && typeof grecaptcha !== "undefined") {
+            grecaptcha.reset(window.recaptchaWidgetId);
+            console.log("reCAPTCHA reset.");
+            // Re-render after reset if needed
+            window.recaptchaVerifier.render().then((widgetId) => {
+              window.recaptchaWidgetId = widgetId;
+            });
+          }
+        } catch (e) {
+          console.error("Error resetting reCAPTCHA:", e);
+        }
+      }
+
+      // --- 1. Send OTP ---
+      sendOtpBtn.addEventListener("click", () => {
+        const phoneNumber = "+91" + phoneNumberInput.value;
+
+        // Ensure reCAPTCHA is initialized
+        if (!window.recaptchaVerifier) {
+          message.innerText = "reCAPTCHA not ready. Please wait.";
+          message.className = "error";
+          return;
+        }
+        const appVerifier = window.recaptchaVerifier;
+
+        // if (!phoneNumber || !/^\+[1-9]\d{1,14}$/.test(phoneNumber)) {
+        //   // Basic E.164 format check
+        //   message.innerText =
+        //     "Please enter a valid phone number with country code (e.g., +91...).";
+        //   message.className = "error";
+        //   return;
+        // }
+        message.innerText = "Sending OTP...";
+        message.className = ""; // Clear previous error/success state
+        sendOtpBtn.disabled = true; // Disable button while sending
+
+        auth
+          .signInWithPhoneNumber(phoneNumber, appVerifier)
+          .then((confirmationResult) => {
+            window.confirmationResult = confirmationResult;
+            message.innerText = "OTP Sent!";
+            message.className = "success";
+            phoneGroup.style.display = "none";
+            otpGroup.style.display = "block";
+          })
+          .catch((error) => {
+            // Log the full error object
+            console.error("Error sending OTP:", error);
+            // Provide more specific feedback
+            if (error.code === "auth/invalid-phone-number") {
+              message.innerText = `Error: Invalid phone number format. Use +countrycode...`;
+            } else if (error.code === "auth/too-many-requests") {
+              message.innerText = `Error: Too many requests. Try again later.`;
+            } else {
+              message.innerText = `Error sending OTP. Check console for details. Make sure localhost is authorized in Firebase.`;
+            }
+            message.className = "error";
+            resetRecaptcha(); // Reset reCAPTCHA on error
+          })
+          .finally(() => {
+            sendOtpBtn.disabled = false; // Re-enable button
+          });
+      });
+
+      // --- 2. Verify OTP ---
+      verifyOtpBtn.addEventListener("click", () => {
+        const code = otpCodeInput.value;
+        if (!code || code.length !== 6) {
+          message.innerText = "Please enter a 6-digit code.";
+          message.className = "error";
+          return;
+        }
+        message.innerText = "Verifying...";
+        message.className = "";
+        verifyOtpBtn.disabled = true; // Disable button while verifying
+
+        if (!window.confirmationResult) {
+          message.innerText =
+            "Error: Confirmation result missing. Try sending OTP again.";
+          message.className = "error";
+          verifyOtpBtn.disabled = false;
+          return;
+        }
+
+        window.confirmationResult
+          .confirm(code)
+          .then((result) => {
+            // Success! onAuthStateChanged will handle the redirect.
+            console.log("User verified!", result.user);
+            message.innerText = "✅ SUCCESS! Loading your profile...";
+            message.className = "success";
+            // No need to hide otpGroup, onAuthStateChanged will take over
+          })
+          .catch((error) => {
+            message.innerText = "❌ Invalid OTP code. Try again.";
+            message.className = "error";
+            console.error("Error verifying code:", error);
+            otpCodeInput.value = ""; // Clear the wrong code
+          })
+          .finally(() => {
+            verifyOtpBtn.disabled = false; // Re-enable button
+          });
+      });
+
+      // --- 3. AUTH STATE GUARD (THE "ROUTER") ---
+      auth.onAuthStateChanged((user) => {
+        if (user) {
+          // User is LOGGED IN
+          console.log("Auth state: Logged In", user.uid);
+
+          // Hide login forms, show loading message
+          phoneGroup.style.display = "none";
+          otpGroup.style.display = "none";
+          loadingGroup.style.display = "block";
+          pageTitle.innerText = "Welcome";
+          message.innerText = "Checking your profile..."; // Update message
+          message.className = "";
+
+          // Check if they have a profile
+          const userRef = db.collection("users").doc(user.uid);
+
+          userRef
+            .get()
+            .then((doc) => {
+              if (doc.exists) {
+                // PROFILE EXISTS! Go to the main app.
+                console.log("Profile found. Redirecting to home.html");
+                window.location.href = "home.html";
+              } else {
+                // NEW USER! Go to profile creation.
+                console.log("No profile found. Redirecting to create.html");
+                window.location.href = "create.html";
+              }
+            })
+            .catch((error) => {
+              console.error("Error getting user profile:", error);
+              message.innerText =
+                "Error checking profile. Please try again or contact support.";
+              message.className = "error";
+              loadingGroup.style.display = "none"; // Hide loading on error
+              // Consider adding a logout button here or manual refresh instruction
+            });
+        } else {
+          // User is LOGGED OUT
+          console.log("Auth state: Logged Out");
+          phoneGroup.style.display = "block"; // Show login
+          otpGroup.style.display = "none";
+          loadingGroup.style.display = "none";
+          pageTitle.innerText = "Trubond Login";
+          message.innerText = ""; // Clear message on logout state
+          message.className = "";
+          // Initialize reCAPTCHA for the login form
+          initializeRecaptcha();
+        }
+      });
+    </script>
+  </body>
+</html>
