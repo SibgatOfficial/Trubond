@@ -4,6 +4,8 @@
 
 Trubond is a comprehensive college networking platform designed to connect students, facilitate collaboration, and enhance campus life through digital interaction.
 
+[Visit Trubond Website](https://trubond.netlify.app)
+
 ## Core Features 🌟
 
 ### 🔐 **Authentication & Profiles**
