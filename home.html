@@ -485,11 +485,86 @@
         </button>
       </div>
     </div>
+    <!-- Create Poll Modal -->
+    <div id="create-poll-modal" class="modal">
+      <div class="modal-content">
+        <span class="modal-close" id="close-poll-modal">&times;</span>
+        <h2><span class="material-symbols-outlined">poll</span> Create Poll</h2>
+        <label for="poll-question-input">Poll Question *</label>
+        <input
+          type="text"
+          id="poll-question-input"
+          placeholder="Ask a question..."
+        />
+
+        <label>Poll Options *</label>
+        <div id="poll-options-container">
+          <div class="poll-option-input">
+            <input
+              type="text"
+              placeholder="Option 1"
+              class="poll-option-input-field"
+            />
+            <button
+              type="button"
+              class="remove-option-btn"
+              style="display: none"
+            >
+              <span class="material-symbols-outlined">remove</span>
+            </button>
+          </div>
+          <div class="poll-option-input">
+            <input
+              type="text"
+              placeholder="Option 2"
+              class="poll-option-input-field"
+            />
+            <button
+              type="button"
+              class="remove-option-btn"
+              style="display: none"
+            >
+              <span class="material-symbols-outlined">remove</span>
+            </button>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          id="add-poll-option-btn"
+          class="card-button secondary"
+          style="margin-bottom: 16px"
+        >
+          <span class="material-symbols-outlined">add</span> Add Option
+        </button>
+
+        <label for="poll-duration">Duration (Days)</label>
+        <select id="poll-duration">
+          <option value="1">1 Day</option>
+          <option value="3">3 Days</option>
+          <option value="7" selected>1 Week</option>
+          <option value="30">1 Month</option>
+        </select>
+
+        <button id="submit-poll-btn" class="card-button">
+          <span class="material-symbols-outlined">check</span> Create Poll
+        </button>
+      </div>
+    </div>
+
+    <!-- File Preview Modal -->
+    <div id="file-preview-modal" class="modal">
+      <div class="modal-content" style="max-width: 90%; max-height: 90%">
+        <span class="modal-close" id="close-file-preview-modal">&times;</span>
+        <div id="file-preview-content">
+          <!-- Content will be loaded dynamically -->
+        </div>
+      </div>
+    </div>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
-
     <script src="home.js"></script>
   </body>
 </html>

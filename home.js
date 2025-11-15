@@ -628,7 +628,33 @@ function openChatRoom(type, id, name) {
   // Load messages
   loadChatMessages(type, id);
 }
+const originalOpenChatRoom = window.openChatRoom;
+window.openChatRoom = function (type, id, name) {
+  // Cancel previous listener
+  if (chatListener) {
+    chatListener();
+    chatListener = null;
+  }
 
+  currentChatType = type;
+  currentChatRoomId = id;
+
+  // Update UI
+  const chatRoomName = document.getElementById("chat-room-name");
+  const chatFormContainer = document.getElementById("chat-form-container");
+  const chatRoomItems = document.querySelectorAll(".chat-room-item");
+
+  if (chatRoomName) chatRoomName.textContent = name;
+  if (chatFormContainer) chatFormContainer.style.display = "flex";
+
+  // Highlight active room
+  chatRoomItems.forEach((item) => item.classList.remove("active"));
+  event.currentTarget.classList.add("active");
+
+  // Load messages with enhanced rendering
+  loadChatMessages(type, id);
+};
+// Enhanced Chat Message Loading with File Support
 function loadChatMessages(type, roomId) {
   const messageList = document.getElementById("chat-message-list");
   if (!messageList) return;
@@ -652,6 +678,10 @@ function loadChatMessages(type, roomId) {
   }
 
   try {
+    if (chatListener) {
+      chatListener();
+    }
+
     chatListener = db
       .collection(collectionPath)
       .orderBy("createdAt", "asc")
@@ -665,23 +695,8 @@ function loadChatMessages(type, roomId) {
 
           let html = "";
           snapshot.forEach((doc) => {
-            const message = doc.data();
-            const isOwnMessage = message.senderId === currentUserData.id;
-            html += `
-                  <div class="message ${
-                    isOwnMessage ? "own-message" : "other-message"
-                  }">
-                    ${
-                      !isOwnMessage
-                        ? `<div class="message-sender">${message.senderUsername}</div>`
-                        : ""
-                    }
-                    <div class="message-text">${message.text}</div>
-                    <div class="message-time">${new Date(
-                      message.createdAt
-                    ).toLocaleTimeString()}</div>
-                  </div>
-                `;
+            const message = { id: doc.id, ...doc.data() };
+            html += renderChatMessage(message);
           });
           messageList.innerHTML = html;
           messageList.scrollTop = messageList.scrollHeight;
@@ -696,7 +711,6 @@ function loadChatMessages(type, roomId) {
     setContentState(messageList, "Error loading messages.");
   }
 }
-
 async function sendChatMessage() {
   const messageInput = document.getElementById("chat-message-input");
   if (!messageInput || !currentChatType || !currentChatRoomId) return;
@@ -736,7 +750,6 @@ async function sendChatMessage() {
 
   if (sendBtn) sendBtn.disabled = false;
 }
-
 // --- PROJECT MANAGEMENT ---
 async function handleProjectRequest(projectId) {
   if (!currentUserData) return;
@@ -2118,6 +2131,574 @@ function escapeHtml(unsafe) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+// Add these variables at the top with other global variables
+let currentPollData = null;
+let currentChatFiles = new Map();
+
+// Enhanced Post Creation with Polls
+function enhancePostCreationModal() {
+  const postModal = document.getElementById("create-post-modal");
+  const postTextInput = document.getElementById("post-text-input");
+
+  // Add poll button to post modal
+  const pollButton = document.createElement("button");
+  pollButton.type = "button";
+  pollButton.className = "card-button secondary";
+  pollButton.innerHTML =
+    '<span class="material-symbols-outlined">poll</span> Add Poll';
+  pollButton.style.marginBottom = "12px";
+  pollButton.onclick = openCreatePollModal;
+
+  postTextInput.parentNode.insertBefore(pollButton, postTextInput);
+}
+
+// File Upload Functions
+async function uploadChatFile(file, chatType, chatRoomId) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const fileId =
+        Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9.]/g, "_");
+      const storageRef = storage.ref(
+        `chat_files/${chatType}/${chatRoomId}/${fileId}`
+      );
+
+      console.log("Starting upload for file:", file.name); // Debug log
+
+      const uploadTask = storageRef.put(file);
+
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          // Progress tracking
+          const progress =
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log("Upload is " + progress + "% done");
+        },
+        (error) => {
+          console.error("Upload failed:", error);
+          reject(error);
+        },
+        async () => {
+          try {
+            // Upload completed
+            const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+            console.log("File uploaded successfully. URL:", downloadURL); // Debug log
+
+            // Send file message immediately
+            await sendFileMessage(chatType, chatRoomId, file, downloadURL);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        }
+      );
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+async function sendFileMessage(chatType, roomId, file, downloadURL) {
+  let collectionPath;
+  switch (chatType) {
+    case "global":
+      collectionPath = `global_chat/${roomId}/messages`;
+      break;
+    case "branch":
+      collectionPath = `branch_chats/${roomId}/messages`;
+      break;
+    case "project":
+      collectionPath = `project_chats/${roomId}/messages`;
+      break;
+  }
+
+  const messageData = {
+    type: "file",
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type,
+    downloadURL: downloadURL,
+    senderId: currentUserData.id,
+    senderUsername: currentUserData.username,
+    createdAt: new Date().toISOString(),
+  };
+
+  console.log("Sending file message:", messageData); // Debug log
+
+  await db.collection(collectionPath).add(messageData);
+}
+
+// Enhanced Chat Message Rendering
+function renderChatMessage(message) {
+  const isOwnMessage = message.senderId === currentUserData.id;
+
+  if (message.type === "file") {
+    return renderFileMessage(message, isOwnMessage);
+  } else if (message.type === "poll") {
+    return renderPollMessage(message, isOwnMessage);
+  } else {
+    return renderTextMessage(message, isOwnMessage);
+  }
+}
+function renderFileMessage(message, isOwnMessage) {
+  console.log("Rendering file message:", message); // Debug log
+
+  const fileSize = formatFileSize(message.fileSize);
+  const fileIcon = getFileIcon(message.fileType);
+  const fileName = message.fileName || "Unknown File";
+  const downloadURL = message.downloadURL || "#";
+
+  return `
+    <div class="message ${isOwnMessage ? "own-message" : "other-message"}">
+      ${
+        !isOwnMessage
+          ? `<div class="message-sender">${message.senderUsername}</div>`
+          : ""
+      }
+      <a href="${downloadURL}" target="_blank" class="message-file" download="${fileName}">
+        <div class="file-icon">
+          <span class="material-symbols-outlined">${fileIcon}</span>
+        </div>
+        <div class="file-info">
+          <div class="file-name">${escapeHtml(fileName)}</div>
+          <div class="file-size">${fileSize}</div>
+        </div>
+        <span class="material-symbols-outlined">download</span>
+      </a>
+      <div class="message-time">${new Date(
+        message.createdAt
+      ).toLocaleTimeString()}</div>
+    </div>
+  `;
+}
+function renderPollMessage(message, isOwnMessage) {
+  console.log("Rendering poll message:", message); // Debug log
+
+  const poll = message.poll || {};
+  const question = poll.question || "Poll Question";
+  const options = poll.options || [];
+  const totalVotes = options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
+
+  return `
+    <div class="message ${isOwnMessage ? "own-message" : "other-message"}">
+      ${
+        !isOwnMessage
+          ? `<div class="message-sender">${message.senderUsername}</div>`
+          : ""
+      }
+      <div class="poll-container">
+        <div class="poll-question">${escapeHtml(question)}</div>
+        ${options
+          .map((option, index) => {
+            const percentage =
+              totalVotes > 0 ? ((option.votes || 0) / totalVotes) * 100 : 0;
+            const hasVoted =
+              option.voters && option.voters.includes(currentUserData.id);
+
+            return `
+            <div class="poll-option ${hasVoted ? "selected" : ""}" 
+                 onclick="handleVote('${message.id}', ${index})">
+              <span class="material-symbols-outlined">
+                ${hasVoted ? "radio_button_checked" : "radio_button_unchecked"}
+              </span>
+              <div style="flex: 1;">
+                <div>${escapeHtml(option.text || "Option " + (index + 1))}</div>
+                <div class="poll-bar">
+                  <div class="poll-fill" style="width: ${percentage}%"></div>
+                </div>
+                <div class="poll-stats">
+                  <span>${option.votes || 0} votes</span>
+                  <span>${percentage.toFixed(1)}%</span>
+                </div>
+              </div>
+            </div>
+          `;
+          })
+          .join("")}
+        <div style="font-size: 0.8rem; color: var(--medium-gray); margin-top: 8px;">
+          ${totalVotes} total votes • Created by ${message.senderUsername}
+        </div>
+      </div>
+      <div class="message-time">${new Date(
+        message.createdAt
+      ).toLocaleTimeString()}</div>
+    </div>
+  `;
+}
+
+function renderTextMessage(message, isOwnMessage) {
+  return `
+    <div class="message ${isOwnMessage ? "own-message" : "other-message"}">
+      ${
+        !isOwnMessage
+          ? `<div class="message-sender">${message.senderUsername}</div>`
+          : ""
+      }
+      <div class="message-text">${escapeHtml(message.text)}</div>
+      <div class="message-time">${new Date(
+        message.createdAt
+      ).toLocaleTimeString()}</div>
+    </div>
+  `;
+}
+
+// Enhanced Chat Input
+function enhanceChatInput() {
+  const chatInputContainer = document.querySelector(".chat-input-container");
+  if (!chatInputContainer) return;
+
+  chatInputContainer.innerHTML = `
+    <div class="chat-input-enhanced">
+      <div class="chat-actions">
+        <button class="chat-action-btn" title="Attach File" onclick="document.getElementById('chat-file-input').click()">
+          <span class="material-symbols-outlined">attach_file</span>
+        </button>
+        <button class="chat-action-btn" title="Create Poll" onclick="openCreatePollModal()">
+          <span class="material-symbols-outlined">poll</span>
+        </button>
+      </div>
+      <div class="chat-input-main">
+        <input type="text" id="chat-message-input" placeholder="Type a message...">
+        <input type="file" id="chat-file-input" style="display: none;" onchange="handleChatFileSelect(this.files[0])">
+      </div>
+      <button id="send-chat-message-btn" class="card-button" style="width: auto; padding: 10px 14px;">
+        <span class="material-symbols-outlined">send</span>
+      </button>
+    </div>
+  `;
+
+  // Reattach event listeners
+  const sendBtn = document.getElementById("send-chat-message-btn");
+  const messageInput = document.getElementById("chat-message-input");
+
+  if (sendBtn) {
+    sendBtn.onclick = sendChatMessage;
+  }
+
+  if (messageInput) {
+    messageInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        sendChatMessage();
+      }
+    });
+  }
+}
+
+// File selection handler
+async function handleChatFileSelect(file) {
+  if (!file) return;
+
+  if (file.size > 10 * 1024 * 1024) {
+    // 10MB limit
+    alert("File size must be less than 10MB");
+    return;
+  }
+
+  if (!currentChatType || !currentChatRoomId) {
+    alert("Please select a chat room first");
+    return;
+  }
+
+  try {
+    // Show uploading indicator
+    const messageList = document.getElementById("chat-message-list");
+    const tempMessageId = "uploading-" + Date.now();
+    const tempHtml = `
+      <div class="message own-message" id="${tempMessageId}">
+        <div class="message-text" style="color: var(--medium-gray);">
+          <span class="material-symbols-outlined" style="vertical-align: middle;">upload</span>
+          Uploading ${file.name}...
+        </div>
+      </div>
+    `;
+    messageList.innerHTML += tempHtml;
+    messageList.scrollTop = messageList.scrollHeight;
+
+    await uploadChatFile(file, currentChatType, currentChatRoomId);
+
+    // Remove uploading indicator
+    const tempElement = document.getElementById(tempMessageId);
+    if (tempElement) {
+      tempElement.remove();
+    }
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    alert("Failed to upload file: " + error.message);
+  }
+}
+
+// Poll Creation Functions
+function openCreatePollModal() {
+  const modal = document.getElementById("create-poll-modal");
+  if (modal) modal.style.display = "block";
+  setupPollOptions();
+}
+
+function setupPollOptions() {
+  const container = document.getElementById("poll-options-container");
+  container.innerHTML = `
+    <div class="poll-option-input">
+      <input type="text" placeholder="Option 1" class="poll-option-input-field">
+      <button type="button" class="remove-option-btn" style="display: none;">
+        <span class="material-symbols-outlined">remove</span>
+      </button>
+    </div>
+    <div class="poll-option-input">
+      <input type="text" placeholder="Option 2" class="poll-option-input-field">
+      <button type="button" class="remove-option-btn" style="display: none;">
+        <span class="material-symbols-outlined">remove</span>
+      </button>
+    </div>
+  `;
+
+  // Add event listeners
+  document.getElementById("add-poll-option-btn").onclick = addPollOption;
+  document.querySelectorAll(".remove-option-btn").forEach((btn) => {
+    btn.onclick = function () {
+      if (document.querySelectorAll(".poll-option-input").length > 2) {
+        this.parentElement.remove();
+        updateRemoveButtons();
+      }
+    };
+  });
+}
+
+function addPollOption() {
+  const container = document.getElementById("poll-options-container");
+  const optionCount = container.children.length + 1;
+
+  if (optionCount >= 6) {
+    alert("Maximum 6 options allowed");
+    return;
+  }
+
+  const optionDiv = document.createElement("div");
+  optionDiv.className = "poll-option-input";
+  optionDiv.innerHTML = `
+    <input type="text" placeholder="Option ${optionCount}" class="poll-option-input-field">
+    <button type="button" class="remove-option-btn">
+      <span class="material-symbols-outlined">remove</span>
+    </button>
+  `;
+
+  container.appendChild(optionDiv);
+  updateRemoveButtons();
+}
+
+function updateRemoveButtons() {
+  const removeButtons = document.querySelectorAll(".remove-option-btn");
+  removeButtons.forEach((btn) => {
+    btn.style.display =
+      document.querySelectorAll(".poll-option-input").length > 2
+        ? "block"
+        : "none";
+  });
+}
+async function createPoll() {
+  const questionInput = document.getElementById("poll-question-input");
+  const optionInputs = document.querySelectorAll(".poll-option-input-field");
+
+  const question = questionInput.value.trim();
+  const options = Array.from(optionInputs)
+    .map((input) => input.value.trim())
+    .filter((text) => text !== "");
+
+  const duration = parseInt(document.getElementById("poll-duration").value);
+
+  if (!question) {
+    alert("Please enter a poll question");
+    return;
+  }
+
+  if (options.length < 2) {
+    alert("Please add at least 2 options");
+    return;
+  }
+
+  if (!currentChatType || !currentChatRoomId) {
+    alert("Please select a chat room first");
+    return;
+  }
+
+  const pollData = {
+    question: question,
+    options: options.map((text) => ({
+      text: text,
+      votes: 0,
+      voters: [],
+    })),
+    totalVotes: 0,
+    expiresAt: new Date(
+      Date.now() + duration * 24 * 60 * 60 * 1000
+    ).toISOString(),
+    isActive: true,
+  };
+
+  // Send poll as message
+  let collectionPath;
+  switch (currentChatType) {
+    case "global":
+      collectionPath = `global_chat/${currentChatRoomId}/messages`;
+      break;
+    case "branch":
+      collectionPath = `branch_chats/${currentChatRoomId}/messages`;
+      break;
+    case "project":
+      collectionPath = `project_chats/${currentChatRoomId}/messages`;
+      break;
+  }
+
+  const messageData = {
+    type: "poll",
+    poll: pollData,
+    senderId: currentUserData.id,
+    senderUsername: currentUserData.username,
+    createdAt: new Date().toISOString(),
+  };
+
+  console.log("Sending poll message:", messageData); // Debug log
+
+  await db.collection(collectionPath).add(messageData);
+
+  // Close modal and reset form
+  document.getElementById("create-poll-modal").style.display = "none";
+  questionInput.value = "";
+  optionInputs.forEach((input) => (input.value = ""));
+}
+// Utility Functions
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+function getFileIcon(fileType) {
+  if (fileType.startsWith("image/")) return "image";
+  if (fileType === "application/pdf") return "picture_as_pdf";
+  if (fileType.includes("spreadsheet") || fileType.includes("excel"))
+    return "table_chart";
+  if (fileType.includes("document") || fileType.includes("word"))
+    return "description";
+  if (fileType.includes("zip") || fileType.includes("compressed"))
+    return "folder_zip";
+  return "insert_drive_file";
+}
+
+// Initialize enhanced features
+function initializeEnhancedFeatures() {
+  enhanceChatInput();
+
+  // Add poll modal event listeners
+  const submitPollBtn = document.getElementById("submit-poll-btn");
+  const closePollModalBtn = document.getElementById("close-poll-modal");
+
+  if (submitPollBtn) {
+    submitPollBtn.onclick = createPoll;
+  }
+
+  if (closePollModalBtn) {
+    closePollModalBtn.onclick = function () {
+      document.getElementById("create-poll-modal").style.display = "none";
+    };
+  }
+}
+// Call this after DOM is loaded
+document.addEventListener("DOMContentLoaded", function () {
+  setTimeout(initializeEnhancedFeatures, 1000);
+});
+
+// Fixed Poll Voting Function
+async function handleVote(messageId, optionIndex) {
+  if (!currentChatType || !currentChatRoomId) {
+    alert("Please select a chat room first");
+    return;
+  }
+
+  console.log("Voting on message:", messageId, "option:", optionIndex);
+
+  let collectionPath;
+  switch (currentChatType) {
+    case "global":
+      collectionPath = `global_chat/${currentChatRoomId}/messages`;
+      break;
+    case "branch":
+      collectionPath = `branch_chats/${currentChatRoomId}/messages`;
+      break;
+    case "project":
+      collectionPath = `project_chats/${currentChatRoomId}/messages`;
+      break;
+  }
+
+  try {
+    const messageRef = db.collection(collectionPath).doc(messageId);
+
+    // Use transaction to prevent race conditions
+    await db.runTransaction(async (transaction) => {
+      const messageDoc = await transaction.get(messageRef);
+
+      if (!messageDoc.exists) {
+        throw new Error("Message not found");
+      }
+
+      const message = messageDoc.data();
+
+      // Check if it's a poll
+      if (!message.poll || !message.poll.options) {
+        throw new Error("Not a valid poll");
+      }
+
+      // Check if poll is still active
+      if (
+        message.poll.expiresAt &&
+        new Date(message.poll.expiresAt) < new Date()
+      ) {
+        throw new Error("This poll has expired");
+      }
+
+      // Check if user already voted
+      let userAlreadyVoted = false;
+      const updatedOptions = message.poll.options.map((option, index) => {
+        // Check if user voted in this option
+        if (option.voters && option.voters.includes(currentUserData.id)) {
+          userAlreadyVoted = true;
+        }
+        return option;
+      });
+
+      if (userAlreadyVoted) {
+        throw new Error("You have already voted in this poll");
+      }
+
+      // Update the vote count for selected option
+      const finalOptions = message.poll.options.map((option, index) => {
+        if (index === optionIndex) {
+          return {
+            ...option,
+            votes: (option.votes || 0) + 1,
+            voters: [...(option.voters || []), currentUserData.id],
+          };
+        }
+        return option;
+      });
+
+      // Update the poll in transaction
+      transaction.update(messageRef, {
+        "poll.options": finalOptions,
+        "poll.totalVotes": (message.poll.totalVotes || 0) + 1,
+      });
+    });
+
+    console.log("Vote recorded successfully");
+
+    // Refresh the chat messages to show updated poll
+    loadChatMessages(currentChatType, currentChatRoomId);
+  } catch (error) {
+    console.error("Error voting:", error);
+    alert(error.message || "Failed to vote. Please try again.");
+  }
+}
+
 // Make functions globally accessible
 window.handleLikeClick = handleLikeClick;
 window.openCommentsModal = openCommentsModal;
@@ -2139,3 +2720,7 @@ window.showUserProfile = showUserProfile;
 window.showEventQR = showEventQR;
 window.closeQRModal = closeQRModal;
 window.formatFirestoreTimestamp = formatFirestoreTimestamp;
+window.handleChatFileSelect = handleChatFileSelect;
+window.openCreatePollModal = openCreatePollModal;
+window.createPoll = createPoll;
+window.handleVote = handleVote;
