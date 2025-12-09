@@ -9,7 +9,7 @@
 
 **Enterprise-Grade Campus Connectivity Solution**
 
-[Live Demo](https://trubond.netlify.app) • [Documentation](#) • [Case Study](#)
+[Live Demo](https://trubond.netlify.app) 
 
 </div>
 
