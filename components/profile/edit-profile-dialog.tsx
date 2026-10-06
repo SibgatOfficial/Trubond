@@ -13,8 +13,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { updateUserProfile } from "@/lib/services/users";
 import { compressImage, uploadProfilePhoto } from "@/lib/services/storage";
+import { acceptAttribute, IMAGE_UPLOAD_POLICY } from "@/lib/upload-policy";
 import { useAuth } from "@/context/auth-provider";
 import { BRANCHES } from "@/lib/constants";
 import { DEFAULT_AVATAR } from "@/lib/utils";
@@ -65,7 +73,9 @@ export function EditProfileDialog({
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to update profile.");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update profile."
+      );
     } finally {
       setSaving(false);
     }
@@ -98,26 +108,25 @@ export function EditProfileDialog({
           </div>
           <div>
             <Label htmlFor="ep-branch">Branch</Label>
-            <select
-              id="ep-branch"
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-              className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">Select branch</option>
-              {BRANCHES.map((b) => (
-                <option key={b.value} value={b.value}>
-                  {b.label}
-                </option>
-              ))}
-            </select>
+            <Select value={branch} onValueChange={setBranch}>
+              <SelectTrigger id="ep-branch" className="mt-1.5">
+                <SelectValue placeholder="Select branch" />
+              </SelectTrigger>
+              <SelectContent>
+                {BRANCHES.map((b) => (
+                  <SelectItem key={b.value} value={b.value}>
+                    {b.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label htmlFor="ep-photo">New photo</Label>
             <Input
               id="ep-photo"
               type="file"
-              accept="image/*"
+              accept={acceptAttribute(IMAGE_UPLOAD_POLICY)}
               onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
               className="mt-1.5"
             />

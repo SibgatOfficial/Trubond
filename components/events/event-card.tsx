@@ -1,27 +1,63 @@
 "use client";
 
 import * as React from "react";
-import { CalendarDays, Loader2, MapPin, QrCode, Ticket, Users } from "lucide-react";
+import {
+  CalendarDays,
+  Loader2,
+  MapPin,
+  MoreHorizontal,
+  Pencil,
+  QrCode,
+  Ticket,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatTimestamp } from "@/lib/utils";
-import type { EventItem } from "@/types";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { SafeImage } from "@/components/shared/safe-image";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { deleteEvent } from "@/lib/services/events";
+import { formatTimestamp, isOwnedBy, seedGradient } from "@/lib/utils";
+import type { EventItem, UserProfile } from "@/types";
+import { toast } from "sonner";
 
 export function EventCard({
   event,
   joined,
+  currentUser,
   onJoin,
   onLeave,
   onShowTicket,
+  onEdit,
+  onDeleted,
 }: {
   event: EventItem;
   joined: boolean;
+  currentUser: UserProfile;
   onJoin: (event: EventItem) => Promise<void> | void;
   onLeave: (event: EventItem) => Promise<void> | void;
   onShowTicket: (event: EventItem) => void;
+  onEdit: (event: EventItem) => void;
+  onDeleted: (eventId: string) => void;
 }) {
+  // Uid OR username — events created before the auth migration carry only the
+  // creator's old uid, so the uid check alone would hide their own controls.
+  const isOwner = isOwnedBy(
+    event.createdBy,
+    event.createdByUsername,
+    currentUser
+  );
   const [busy, setBusy] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+
   const capacity = event.maxAttendees ?? 0;
   const count = event.attendeeCount ?? 0;
   const isFull = capacity > 0 && count >= capacity && !joined;
@@ -36,18 +72,77 @@ export function EventCard({
     }
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteEvent(event.id);
+      onDeleted(event.id);
+      toast.success("Event deleted");
+      setConfirmOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to delete event.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
-    <Card>
+    <Card className="overflow-hidden">
+      {event.coverPhotoUrl ? (
+        <SafeImage
+          src={event.coverPhotoUrl}
+          alt={`${event.title} cover`}
+          className="h-36 w-full object-cover"
+          wrapperClassName="h-36 w-full"
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          className="h-36 w-full"
+          style={{ background: seedGradient(event.id) }}
+        />
+      )}
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <CardTitle className="flex items-start gap-2 text-base">
             <Ticket className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
             {event.title}
           </CardTitle>
-          {joined && <Badge variant="success">Registered</Badge>}
-          {isFull && <Badge variant="destructive">Full</Badge>}
+
+          <div className="flex shrink-0 items-center gap-1">
+            {joined && <Badge variant="success">Registered</Badge>}
+            {isFull && <Badge variant="destructive">Full</Badge>}
+
+            {isOwner && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="Event options"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => onEdit(event)}>
+                    <Pencil /> Edit event
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => setConfirmOpen(true)}
+                  >
+                    <Trash2 /> Delete event
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         </div>
       </CardHeader>
+
       <CardContent className="space-y-3">
         {event.description && (
           <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
@@ -82,7 +177,7 @@ export function EventCard({
           </div>
         )}
 
-        <div className="flex gap-2 border-t pt-3">
+        <div className="flex flex-wrap gap-2 border-t pt-3">
           {joined ? (
             <>
               <Button
@@ -117,6 +212,20 @@ export function EventCard({
           )}
         </div>
       </CardContent>
+
+      <ConfirmDeleteDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`Delete "${event.title}"?`}
+        description={
+          count > 0
+            ? `${count} ${count === 1 ? "person is" : "people are"} registered. Their registrations and QR tickets will stop working.`
+            : "This removes the event and its registrations. It can't be undone."
+        }
+        confirmLabel="Delete event"
+        busy={deleting}
+        onConfirm={handleDelete}
+      />
     </Card>
   );
 }

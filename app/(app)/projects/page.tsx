@@ -6,52 +6,74 @@ import { useAuth } from "@/context/auth-provider";
 import { ProjectCard } from "@/components/projects/project-card";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
 import { ManageProjectDialog } from "@/components/projects/manage-project-dialog";
+import { EditProjectDialog } from "@/components/projects/edit-project-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
+import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  hasRequested,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  fetchOlderProjects,
+  getRequestedProjectIds,
   leaveProject,
   requestToJoin,
   subscribeToProjects,
 } from "@/lib/services/projects";
+import { LoadMore } from "@/components/shared/load-more";
+import { usePagedList } from "@/hooks/use-paged-list";
 import type { Project } from "@/types";
 import { toast } from "sonner";
 
 export default function ProjectsPage() {
   const { profile } = useAuth();
-  const [projects, setProjects] = React.useState<Project[]>([]);
+  const {
+    items: projects,
+    setItems: setProjects,
+    hasMore,
+    loadingMore,
+    applyFirstPage,
+    loadMore,
+  } = usePagedList<Project>(fetchOlderProjects, () =>
+    toast.error("Failed to load more projects.")
+  );
   const [pending, setPending] = React.useState<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(true);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [manageProject, setManageProject] = React.useState<Project | null>(null);
+  const [editProject, setEditProject] = React.useState<Project | null>(null);
+  const [leaveTarget, setLeaveTarget] = React.useState<Project | null>(null);
+  const [leaving, setLeaving] = React.useState(false);
 
   React.useEffect(() => {
-    const unsubscribe = subscribeToProjects((next) => {
-      setProjects(next);
+    const unsubscribe = subscribeToProjects((page) => {
+      applyFirstPage(page);
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [applyFirstPage]);
 
   React.useEffect(() => {
-    if (!profile || projects.length === 0) return;
+    if (!profile) return;
     let active = true;
-    (async () => {
-      const entries = await Promise.all(
-        projects.map(async (p) => [p.id, await hasRequested(p.id, profile.id)] as const)
-      );
-      if (!active) return;
-      const next = new Set<string>();
-      entries.forEach(([id, isPending]) => {
-        if (isPending) next.add(id);
-      });
-      setPending(next);
-    })().catch(() => undefined);
+    // One collection-group query rather than one query per project.
+    getRequestedProjectIds(profile.id)
+      .then((set) => {
+        if (active) setPending(set);
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
     };
-  }, [projects, profile]);
+  }, [profile]);
 
   if (!profile) return null;
 
@@ -66,25 +88,32 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleLeave = async (project: Project) => {
-    if (!window.confirm(`Leave "${project.title}"?`)) return;
+  const handleLeaveConfirm = async () => {
+    if (!leaveTarget) return;
+    setLeaving(true);
     try {
-      await leaveProject(project.id, profile.id);
+      await leaveProject(leaveTarget.id, profile.id);
       toast.success("You left the project.");
+      setLeaveTarget(null);
     } catch (error) {
       console.error(error);
       toast.error("Failed to leave project.");
+    } finally {
+      setLeaving(false);
     }
   };
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-bold">Projects</h1>
-        <Button className="gap-2" onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" /> New Project
-        </Button>
-      </div>
+      <PageHeader
+        title="Projects"
+        description="Find teammates and build something together."
+        action={
+          <Button className="gap-2" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" /> New Project
+          </Button>
+        }
+      />
 
       {loading ? (
         <div className="space-y-4">
@@ -94,6 +123,7 @@ export default function ProjectsPage() {
         </div>
       ) : projects.length === 0 ? (
         <EmptyState
+          animation="empty"
           icon={FolderKanban}
           title="No projects yet"
           description="Start a project and find teammates with the skills you need."
@@ -108,12 +138,23 @@ export default function ProjectsPage() {
               isMember={project.members?.includes(profile.id)}
               isPending={pending.has(project.id)}
               onRequest={handleRequest}
-              onLeave={handleLeave}
+              onLeave={setLeaveTarget}
               onManage={setManageProject}
+              onEdit={setEditProject}
+              onDeleted={(id) =>
+                setProjects((prev) => prev.filter((item) => item.id !== id))
+              }
             />
           ))}
         </div>
       )}
+
+      <LoadMore
+        hasMore={hasMore}
+        loading={loadingMore}
+        onClick={loadMore}
+        label="Load more projects"
+      />
 
       <CreateProjectDialog
         currentUser={profile}
@@ -128,6 +169,53 @@ export default function ProjectsPage() {
           if (!open) setManageProject(null);
         }}
       />
+
+      <EditProjectDialog
+        project={editProject}
+        open={editProject !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditProject(null);
+        }}
+        onSaved={(patch) =>
+          setProjects((prev) =>
+            prev.map((item) =>
+              item.id === editProject?.id ? { ...item, ...patch } : item
+            )
+          )
+        }
+      />
+
+      <AlertDialog
+        open={leaveTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setLeaveTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Leave &ldquo;{leaveTarget?.title}&rdquo;?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              You&apos;ll stop receiving project updates and lose access to the
+              project chat. The owner can invite you again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={leaving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleLeaveConfirm();
+              }}
+              disabled={leaving}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {leaving ? "Leaving…" : "Leave project"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

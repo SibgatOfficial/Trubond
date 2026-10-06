@@ -19,16 +19,54 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { EditProfileDialog } from "@/components/profile/edit-profile-dialog";
 import { subscribeToUserPosts } from "@/lib/services/posts";
 import { subscribeToUserProjects } from "@/lib/services/projects";
-import { getEvent, hasJoinedEvent, subscribeToEvents } from "@/lib/services/events";
+import { getJoinedEventIds, subscribeToEvents } from "@/lib/services/events";
+import { getUserActivityCounts } from "@/lib/services/stats";
 import { DEFAULT_AVATAR, initials, timeAgo } from "@/lib/utils";
 import type { EventItem, Post, Project } from "@/types";
 
 export default function ProfilePage() {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const [posts, setPosts] = React.useState<Post[]>([]);
   const [projects, setProjects] = React.useState<Project[]>([]);
   const [events, setEvents] = React.useState<EventItem[]>([]);
   const [editOpen, setEditOpen] = React.useState(false);
+  const [activity, setActivity] = React.useState<{
+    notes: number | null;
+    projects: number | null;
+    events: number | null;
+  }>({ notes: null, projects: null, events: null });
+
+  // Aggregation counts — one read per 1,000 documents, so this stays cheap and
+  // is not limited by how much of each list has been paginated in.
+  React.useEffect(() => {
+    if (!profile) return;
+    let active = true;
+    (async () => {
+      const [counts, joinedIds] = await Promise.all([
+        getUserActivityCounts(profile.id),
+        getJoinedEventIds(profile.id).catch(() => new Set<string>()),
+      ]);
+      if (active) {
+        setActivity({
+          notes: counts.notes,
+          projects: counts.projects,
+          events: joinedIds.size,
+        });
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profile]);
+
+  // Pull fresh follower/following counters when the page opens — they are
+  // maintained by the follow service and change from other screens.
+  React.useEffect(() => {
+    refreshProfile().catch(() => undefined);
+    // Intentionally mount-only: `refreshProfile` updates context state, so
+    // depending on it here would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   React.useEffect(() => {
     if (!profile) return;
@@ -43,16 +81,16 @@ export default function ProfilePage() {
   React.useEffect(() => {
     if (!profile) return;
     let active = true;
-    const unsubscribe = subscribeToEvents(async (all) => {
-      const joined: EventItem[] = [];
-      for (const event of all) {
-        const isJoined = await hasJoinedEvent(event.id, profile.id);
-        if (isJoined) {
-          const full = (await getEvent(event.id)) ?? event;
-          joined.push(full);
-        }
+    const unsubscribe = subscribeToEvents(async (page) => {
+      try {
+        // One collection-group query, then filter the events already in hand —
+        // previously this ran an attendees query per event and re-fetched every
+        // joined event document individually.
+        const joinedIds = await getJoinedEventIds(profile.id);
+        if (active) setEvents(page.items.filter((event) => joinedIds.has(event.id)));
+      } catch (error) {
+        console.error(error);
       }
-      if (active) setEvents(joined);
     });
     return () => {
       active = false;
@@ -109,17 +147,22 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
             {[
               { label: "Posts", value: profile.postCount ?? 0 },
-              { label: "Projects", value: profile.projectsJoined ?? 0 },
-              { label: "Events", value: profile.eventsJoined ?? 0 },
+              { label: "Notes", value: activity.notes },
+              { label: "Projects", value: activity.projects },
+              { label: "Events", value: activity.events },
+              { label: "Followers", value: profile.followerCount ?? 0 },
+              { label: "Following", value: profile.followingCount ?? 0 },
             ].map((stat) => (
               <div
                 key={stat.label}
                 className="rounded-lg bg-muted/60 p-3 text-center"
               >
-                <p className="text-lg font-bold text-primary">{stat.value}</p>
+                <p className="text-lg font-bold text-primary">
+                  {stat.value ?? "—"}
+                </p>
                 <p className="text-xs text-muted-foreground">{stat.label}</p>
               </div>
             ))}

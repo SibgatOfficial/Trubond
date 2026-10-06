@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
+import { PageHeader } from "@/components/shared/page-header";
 import { getChatRooms } from "@/lib/services/chat";
 import type { ChatRoom } from "@/types";
 
@@ -27,12 +28,10 @@ export default function GroupsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div>
-        <h1 className="font-display text-2xl font-bold">Groups</h1>
-        <p className="text-sm text-muted-foreground">
-          Your global, department and project groups.
-        </p>
-      </div>
+      <PageHeader
+        title="Groups"
+        description="Your global, department and project groups."
+      />
 
       {loading ? (
         <div className="space-y-3">
@@ -42,6 +41,7 @@ export default function GroupsPage() {
         </div>
       ) : rooms.length === 0 ? (
         <EmptyState
+          animation="empty"
           icon={Users}
           title="No groups yet"
           description="Join a project or set your branch to unlock department groups."

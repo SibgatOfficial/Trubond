@@ -6,12 +6,21 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "@/context/auth-provider";
 import { createUserProfile, isUsernameAvailable } from "@/lib/services/users";
 import { uploadProfilePhoto, compressImage } from "@/lib/services/storage";
+import { acceptAttribute, IMAGE_UPLOAD_POLICY } from "@/lib/upload-policy";
 import { DEFAULT_AVATAR, cn } from "@/lib/utils";
 import { BRANCHES, GENDERS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { toast } from "sonner";
 
 type UsernameState = "idle" | "checking" | "available" | "taken";
@@ -103,11 +112,12 @@ export default function OnboardingPage() {
     }
   };
 
-  const selectClass =
-    "mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4 py-10">
+    <main className="relative min-h-screen bg-background px-4 py-10">
+      <div className="absolute right-4 top-4 z-20">
+        <ThemeToggle />
+      </div>
+
       <div className="mx-auto max-w-2xl animate-fade-in">
         <div className="mb-6 text-center">
           <h1 className="font-display text-3xl font-bold text-primary">
@@ -120,7 +130,7 @@ export default function OnboardingPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="rounded-2xl border bg-card p-6 shadow-xl shadow-slate-200/50 sm:p-8"
+          className="rounded-2xl border bg-card p-6 shadow-xl shadow-black/5 dark:shadow-black/40 sm:p-8"
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
@@ -136,7 +146,7 @@ export default function OnboardingPage() {
               <p
                 className={cn(
                   "mt-1.5 h-4 text-xs font-medium",
-                  usernameState === "available" && "text-emerald-600",
+                  usernameState === "available" && "text-emerald-600 dark:text-emerald-400",
                   usernameState === "taken" && "text-destructive",
                   usernameState === "checking" && "text-muted-foreground"
                 )}
@@ -184,7 +194,7 @@ export default function OnboardingPage() {
               <Input
                 id="photo"
                 type="file"
-                accept="image/*"
+                accept={acceptAttribute(IMAGE_UPLOAD_POLICY)}
                 onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
                 className="mt-1.5"
               />
@@ -192,35 +202,33 @@ export default function OnboardingPage() {
 
             <div>
               <Label htmlFor="branch">Branch</Label>
-              <select
-                id="branch"
-                value={branch}
-                onChange={(e) => setBranch(e.target.value)}
-                className={selectClass}
-              >
-                <option value="">Select branch</option>
-                {BRANCHES.map((b) => (
-                  <option key={b.value} value={b.value}>
-                    {b.label}
-                  </option>
-                ))}
-              </select>
+              <Select value={branch} onValueChange={setBranch}>
+                <SelectTrigger id="branch" className="mt-1.5">
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BRANCHES.map((b) => (
+                    <SelectItem key={b.value} value={b.value}>
+                      {b.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="gender">Gender</Label>
-              <select
-                id="gender"
-                value={gender}
-                onChange={(e) => setGender(e.target.value)}
-                className={selectClass}
-              >
-                <option value="">Select gender</option>
-                {GENDERS.map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </select>
+              <Select value={gender} onValueChange={setGender}>
+                <SelectTrigger id="gender" className="mt-1.5">
+                  <SelectValue placeholder="Select gender" />
+                </SelectTrigger>
+                <SelectContent>
+                  {GENDERS.map((g) => (
+                    <SelectItem key={g} value={g}>
+                      {g}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="start-year">Start Year</Label>

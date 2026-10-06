@@ -80,7 +80,7 @@ export function QrTicketDialog({
           <DialogTitle>Event ticket</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col items-center gap-4">
-          <div className="flex min-h-[260px] min-w-[260px] items-center justify-center rounded-xl border bg-white p-4">
+          <div className="qr-surface flex min-h-[260px] min-w-[260px] items-center justify-center rounded-xl border p-4">
             {loading && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
             <div ref={containerRef} />
           </div>
