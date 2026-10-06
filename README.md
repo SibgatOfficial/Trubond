@@ -270,11 +270,3 @@ To run server-side instead, delete `output: "export"` from `next.config.mjs`.
 MIT License — full commercial and institutional use permitted.
 
 ---
-
-<div align="center">
-**Transforming Campus Connectivity Through Technical Innovation** ⭐
-</div>
-   (choose a support email).
-2. Firebase Console → **Authentication → Settings → Authorized domains** →
-   add `localhost` and your production domain.
-3. Optionally **disable the Phone** provider — the app no longer uses it.
