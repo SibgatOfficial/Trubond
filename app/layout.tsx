@@ -2,7 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/auth-provider";
+import { ThemeProvider } from "@/components/theme-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -29,12 +32,20 @@ export const metadata: Metadata = {
     ],
     apple: "/favicon/apple-touch-icon.png",
   },
+  appleWebApp: {
+    capable: true,
+    title: "Trubond",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#1d4ed8",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#1d4ed8" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1120" },
+  ],
 };
 
 export default function RootLayout({
@@ -43,10 +54,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${poppins.variable}`}>
+    // `suppressHydrationWarning` is required by next-themes: it writes the
+    // resolved theme class onto <html> before React hydrates, which is a
+    // deliberate server/client difference.
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${inter.variable} ${poppins.variable}`}
+    >
       <body>
-        <AuthProvider>{children}</AuthProvider>
-        <Toaster />
+        <ThemeProvider>
+          <TooltipProvider delayDuration={300}>
+            <AuthProvider>{children}</AuthProvider>
+          </TooltipProvider>
+          <Toaster />
+        </ThemeProvider>
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   );

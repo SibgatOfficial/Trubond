@@ -10,16 +10,30 @@ import {
   Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { PresenceAvatar } from "@/components/shared/presence-dot";
+import { SafeImage } from "@/components/shared/safe-image";
+import { UserLink } from "@/components/shared/user-link";
 import { Button } from "@/components/ui/button";
+import { ReactionButton } from "@/components/shared/reaction-button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { deletePost, updatePost } from "@/lib/services/posts";
-import { DEFAULT_AVATAR, initials, timeAgo } from "@/lib/utils";
+import { timeAgo, isOwnedBy } from "@/lib/utils";
 import type { Post, UserProfile } from "@/types";
 import { toast } from "sonner";
 
@@ -30,6 +44,8 @@ export function PostCard({
   onToggleLike,
   onOpenComments,
   onDeleted,
+  onView,
+  authorOnline = false,
 }: {
   post: Post;
   currentUser: UserProfile;
@@ -37,14 +53,48 @@ export function PostCard({
   onToggleLike: (post: Post) => void;
   onOpenComments: (postId: string) => void;
   onDeleted: (postId: string) => void;
+  /** Called once, when the post is actually scrolled into view. */
+  onView?: (post: Post) => void;
+  /** Whether the author is currently online, from the presence subscription. */
+  authorOnline?: boolean;
 }) {
-  const isOwner = post.authorId === currentUser.id;
+  // Matches on uid OR username: posts written before the phone→Google auth
+  // migration still carry the author's old uid.
+  const isOwner = isOwnedBy(post.authorId, post.authorUsername, currentUser);
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState(post.text);
   const [busy, setBusy] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  const countedRef = React.useRef(false);
 
+  // Count an impression only when half the card is genuinely on screen.
+  // `incrementViewCount` throttles per post per day on top of this.
+  React.useEffect(() => {
+    const node = cardRef.current;
+    if (!node || !onView || countedRef.current) return;
+    if (typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && !countedRef.current) {
+            countedRef.current = true;
+            onView(post);
+            observer.disconnect();
+          }
+        }
+      },
+      { threshold: 0.5 }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [post, onView]);
+
+  // The dialog is controlled by state rather than nested in the menu item:
+  // a Radix dropdown unmounts its content on select, which would tear the
+  // dialog down with it.
   const handleDelete = async () => {
-    if (!window.confirm("Delete this post? This cannot be undone.")) return;
     setBusy(true);
     try {
       await deletePost(post.id, post.authorId);
@@ -55,6 +105,7 @@ export function PostCard({
       toast.error("Failed to delete post.");
     } finally {
       setBusy(false);
+      setConfirmOpen(false);
     }
   };
 
@@ -74,21 +125,23 @@ export function PostCard({
   };
 
   return (
-    <Card className="overflow-hidden">
+    <Card ref={cardRef} className="overflow-hidden">
       <CardHeader className="flex-row items-center gap-3 space-y-0">
-        <Avatar className="h-10 w-10">
-          <AvatarImage
-            src={post.authorPhoto || DEFAULT_AVATAR}
-            alt={post.authorName || post.authorUsername}
+        <UserLink userId={post.authorId} stopPropagation={false}>
+          <PresenceAvatar
+            src={post.authorPhoto}
+            name={post.authorName || post.authorUsername}
+            online={authorOnline ?? false}
+            avatarClassName="h-10 w-10"
           />
-          <AvatarFallback>
-            {initials(post.authorName || post.authorUsername)}
-          </AvatarFallback>
-        </Avatar>
+        </UserLink>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">
+          <UserLink
+            userId={post.authorId}
+            className="block truncate text-sm font-semibold text-foreground"
+          >
             {post.authorName || post.authorUsername}
-          </p>
+          </UserLink>
           <p className="text-xs text-muted-foreground">
             @{post.authorUsername} · {timeAgo(post.createdAt)}
           </p>
@@ -97,7 +150,12 @@ export function PostCard({
         {isOwner && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                aria-label="Post options"
+              >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -108,11 +166,11 @@ export function PostCard({
                   setEditing(true);
                 }}
               >
-                <Pencil /> Edit
+                <Pencil /> Edit post
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
-                onClick={handleDelete}
+                onSelect={() => setConfirmOpen(true)}
                 disabled={busy}
               >
                 <Trash2 /> Delete
@@ -125,10 +183,11 @@ export function PostCard({
       <CardContent className="space-y-3">
         {editing ? (
           <div className="space-y-2">
-            <textarea
+            <Textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              className="min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Edit post text"
+              className="min-h-[80px]"
             />
             <div className="flex gap-2">
               <Button size="sm" onClick={handleSaveEdit} disabled={busy}>
@@ -153,40 +212,66 @@ export function PostCard({
 
         {post.imageUrl && (
           <div className="relative overflow-hidden rounded-lg border">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <SafeImage
               src={post.imageUrl}
-              alt="Post attachment"
+              alt={`Attachment shared by ${post.authorName || post.authorUsername}`}
               className="max-h-[420px] w-full object-cover"
-              loading="lazy"
+              wrapperClassName="h-40 w-full"
+              fallbackLabel="This image is no longer available"
             />
           </div>
         )}
 
         <div className="flex items-center gap-1 border-t pt-3 text-sm text-muted-foreground">
-          <Button
-            variant="ghost"
-            size="sm"
-            className={liked ? "text-rose-500 hover:text-rose-600" : ""}
-            onClick={() => onToggleLike(post)}
-          >
-            <Heart className={liked ? "fill-current" : ""} />
-            {post.likeCount ?? 0}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onOpenComments(post.id)}
-          >
-            <MessageCircle />
-            {post.commentCount ?? 0}
-          </Button>
+          <ReactionButton
+            icon={Heart}
+            label={liked ? "Unlike this post" : "Like this post"}
+            count={post.likeCount ?? 0}
+            active={liked}
+            activeClassName="text-rose-500 hover:text-rose-600"
+            burst="like"
+            onActivate={() => onToggleLike(post)}
+          />
+          <ReactionButton
+            icon={MessageCircle}
+            label="View comments"
+            count={post.commentCount ?? 0}
+            burst="comment"
+            burstOnlyWhenActivating={false}
+            onActivate={() => onOpenComments(post.id)}
+          />
           <span className="ml-auto flex items-center gap-1.5 pr-2 text-xs">
-            <Eye className="h-4 w-4" />
+            <Eye className="h-4 w-4" aria-hidden="true" />
             {post.viewCount ?? 0}
+            <span className="sr-only">views</span>
           </span>
         </div>
       </CardContent>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this post?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the post and its likes and comments. It
+              can&apos;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDelete();
+              }}
+              disabled={busy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {busy ? "Deleting…" : "Delete post"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

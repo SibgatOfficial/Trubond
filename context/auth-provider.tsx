@@ -90,7 +90,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null);
   const [profile, setProfile] = React.useState<UserProfile | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const [reloadToken, setReloadToken] = React.useState(0);
 
   React.useEffect(() => {
     let active = true;
@@ -123,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       active = false;
       unsubscribe();
     };
-  }, [reloadToken]);
+  }, []);
 
   const signInWithGoogle = React.useCallback(async () => {
     const provider = new GoogleAuthProvider();

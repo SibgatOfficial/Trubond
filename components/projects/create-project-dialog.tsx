@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2 } from "lucide-react";
+import { ImagePlus, Loader2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createProject } from "@/lib/services/projects";
+import { compressImage, uploadCoverImage } from "@/lib/services/storage";
+import {
+  acceptAttribute,
+  checkUpload,
+  IMAGE_UPLOAD_POLICY,
+} from "@/lib/upload-policy";
 import type { UserProfile } from "@/types";
 import { toast } from "sonner";
 
@@ -30,13 +36,38 @@ export function CreateProjectDialog({
   const [description, setDescription] = React.useState("");
   const [skills, setSkills] = React.useState("");
   const [membersNeeded, setMembersNeeded] = React.useState("3");
+  const [cover, setCover] = React.useState<File | null>(null);
+  const [preview, setPreview] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
+  const coverInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (!cover) {
+      setPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(cover);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [cover]);
 
   const reset = () => {
     setTitle("");
     setDescription("");
     setSkills("");
     setMembersNeeded("3");
+    setCover(null);
+  };
+
+  const handleCoverPick = (file: File | undefined) => {
+    if (!file) return;
+    // Reject before any upload starts.
+    const check = checkUpload(file, IMAGE_UPLOAD_POLICY);
+    if (!check.ok) {
+      toast.error(check.reason);
+      return;
+    }
+    setCover(file);
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -47,6 +78,16 @@ export function CreateProjectDialog({
     }
     setSaving(true);
     try {
+      let coverPhotoUrl: string | null = null;
+      if (cover) {
+        const compressed = await compressImage(cover);
+        coverPhotoUrl = await uploadCoverImage(
+          "projects",
+          currentUser.id,
+          compressed
+        );
+      }
+
       await createProject(currentUser, {
         title: title.trim(),
         description: description.trim(),
@@ -55,25 +96,81 @@ export function CreateProjectDialog({
           .map((s) => s.trim())
           .filter(Boolean),
         membersNeeded: Number(membersNeeded) || 1,
+        coverPhotoUrl,
       });
+
       toast.success("Project created!");
       reset();
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to create project.");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create project."
+      );
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!saving) onOpenChange(next);
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create a project</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label>Cover image</Label>
+            {preview ? (
+              <div className="relative mt-1.5 overflow-hidden rounded-lg border">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={preview}
+                  alt="Project cover preview"
+                  className="h-36 w-full object-cover"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="absolute right-2 top-2 h-7 w-7"
+                  onClick={() => setCover(null)}
+                  aria-label="Remove cover image"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-1.5 gap-2"
+                onClick={() => coverInputRef.current?.click()}
+              >
+                <ImagePlus className="h-4 w-4" /> Add a cover
+              </Button>
+            )}
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept={acceptAttribute(IMAGE_UPLOAD_POLICY)}
+              className="hidden"
+              onChange={(e) => {
+                handleCoverPick(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Optional. Shown as the project's banner.
+            </p>
+          </div>
+
           <div>
             <Label htmlFor="p-title">Title *</Label>
             <Input

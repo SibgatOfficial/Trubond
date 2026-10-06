@@ -1,0 +1,11 @@
+# Pretty profile URLs on Netlify.
+#
+# A static export cannot have a real /u/<username> route (generateStaticParams
+# would need every username at build time), so rewrite it onto the query-param
+# route the app actually ships. VerceL users: the equivalent lives in
+# vercel.json — "rewrites": [{ "source": "/u/:u", "destination": "/user?u=:u" }]
+/u/*  /user?u=:splat  200
+
+# SPA fallback for unknown paths (a static export renders each route to its own
+# .html, so this only catches genuinely missing paths).
+/*  /404.html  404

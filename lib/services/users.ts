@@ -4,7 +4,7 @@ import {
   getDoc,
   getDocs,
   query,
-  setDoc,
+  runTransaction,
   updateDoc,
   where,
   writeBatch,
@@ -23,6 +23,25 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const snap = await getDoc(doc(db, "users", uid));
   if (!snap.exists()) return null;
   return { id: snap.id, ...(snap.data() as Omit<UserProfile, "id">) };
+}
+
+/**
+ * Resolves a profile from a username.
+ *
+ * Usernames are the stable identifier — a uid changes if the auth provider
+ * changes (phone → Google gave everyone a new uid), so shared profile links
+ * should use the username and land here.
+ */
+export async function getUserByUsername(
+  username: string
+): Promise<UserProfile | null> {
+  const clean = username.trim().toLowerCase().replace(/^@/, "");
+  if (!clean) return null;
+  const lock = await getDoc(doc(db, "usernames", clean));
+  if (!lock.exists()) return null;
+  const uid = lock.data().userId as string | undefined;
+  if (!uid) return null;
+  return getUserProfile(uid);
 }
 
 export async function getUsersByIds(ids: string[]): Promise<UserProfile[]> {
@@ -101,4 +120,25 @@ export async function updateUserProfile(
   }
 ): Promise<void> {
   await updateDoc(doc(db, "users", uid), data);
+}
+
+/**
+ * Adjusts a denormalised profile counter, clamped at zero.
+ *
+ * `increment()` alone is not safe here: a legacy profile that predates the
+ * field has no value to increment from, so a first decrement would store -1.
+ * Reading inside a transaction keeps the counter honest.
+ */
+export async function adjustUserStat(
+  uid: string,
+  field: "projectsJoined" | "eventsJoined",
+  delta: number
+): Promise<void> {
+  const ref = doc(db, "users", uid);
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists()) return;
+    const current = (snap.data()[field] as number | undefined) ?? 0;
+    transaction.update(ref, { [field]: Math.max(0, current + delta) });
+  });
 }

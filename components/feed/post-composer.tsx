@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { createPost } from "@/lib/services/posts";
 import { compressImage, uploadPostImage } from "@/lib/services/storage";
+import { acceptAttribute, IMAGE_UPLOAD_POLICY } from "@/lib/upload-policy";
 import { DEFAULT_AVATAR, initials } from "@/lib/utils";
 import type { UserProfile } from "@/types";
 import { toast } from "sonner";
@@ -67,7 +68,9 @@ export function PostComposer({
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to publish post.");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to publish post."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -111,6 +114,7 @@ export function PostComposer({
               size="icon"
               className="absolute right-2 top-2 h-7 w-7"
               onClick={() => setFile(null)}
+              aria-label="Remove selected image"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -120,7 +124,7 @@ export function PostComposer({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept={acceptAttribute(IMAGE_UPLOAD_POLICY)}
           className="hidden"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
         />

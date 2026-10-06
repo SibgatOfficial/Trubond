@@ -18,7 +18,7 @@ import {
   getProjectMembers,
 } from "@/lib/services/projects";
 import { getUsersByIds } from "@/lib/services/users";
-import { DEFAULT_AVATAR, initials } from "@/lib/utils";
+import { DEFAULT_AVATAR, initials, isOwnedBy } from "@/lib/utils";
 import type { Project, ProjectRequest, UserProfile } from "@/types";
 import { toast } from "sonner";
 
@@ -37,7 +37,7 @@ export function ManageProjectDialog({
   const [members, setMembers] = React.useState<UserProfile[]>([]);
   const [loading, setLoading] = React.useState(true);
 
-  const isOwner = project?.ownerId === currentUser.id;
+  const isOwner = isOwnedBy(project?.ownerId, project?.ownerUsername, currentUser);
 
   const load = React.useCallback(async () => {
     if (!project) return;

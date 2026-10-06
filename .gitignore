@@ -12,6 +12,9 @@ next-env.d.ts
 # production
 /dist
 
+# local package manager cache (used when the default npm cache is unavailable)
+/.npm-cache
+
 # misc
 .DS_Store
 *.pem

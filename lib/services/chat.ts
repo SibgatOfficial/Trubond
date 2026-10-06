@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   limit,
@@ -8,10 +9,18 @@ import {
   orderBy,
   query,
   runTransaction,
+  updateDoc,
+  type QueryDocumentSnapshot,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { ChatMessage, ChatRoom, ChatType, UserProfile } from "@/types";
+import {
+  fetchOlderPage,
+  PAGE_SIZE,
+  pageFromDocs,
+  type DocMapper,
+} from "@/lib/services/pagination";
+import type { ChatMessage, ChatRoom, ChatType, MessageReply, UserProfile } from "@/types";
 
 const nowIso = () => new Date().toISOString();
 
@@ -30,47 +39,116 @@ export function chatCollectionPath(type: ChatType, roomId: string): string {
   }
 }
 
+const messageMapper: DocMapper<ChatMessage> = (id, data) =>
+  ({ id, ...data }) as unknown as ChatMessage;
+
+/**
+ * The newest page of a room, delivered OLDEST-first for rendering.
+ *
+ * Ordered DESC + `limit` so Firestore returns the newest N (an ascending query
+ * can only limit from the *start* of history); the array is reversed here so
+ * callers can render top-to-bottom.
+ *
+ * Previously this was an unbounded ascending listener — it streamed every
+ * message ever sent in the room, on every client.
+ *
+ * `cursor` is the oldest message on this page; pass it to `fetchOlderMessages`.
+ */
 export function subscribeToMessages(
   type: ChatType,
   roomId: string,
-  callback: (messages: ChatMessage[]) => void,
+  callback: (
+    messages: ChatMessage[],
+    cursor: QueryDocumentSnapshot | null,
+    hasMore: boolean
+  ) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
   const path = chatCollectionPath(type, roomId);
-  const q = query(collection(db, path), orderBy("createdAt", "asc"));
+  const q = query(
+    collection(db, path),
+    orderBy("createdAt", "desc"),
+    limit(PAGE_SIZE.chat)
+  );
   return onSnapshot(
     q,
     (snap) => {
-      callback(
-        snap.docs.map(
-          (d) => ({ id: d.id, ...(d.data() as Omit<ChatMessage, "id">) })
-        )
-      );
+      const page = pageFromDocs(snap.docs, messageMapper, PAGE_SIZE.chat);
+      callback([...page.items].reverse(), page.cursor, page.hasMore);
     },
     (error) => onError?.(error as Error)
   );
+}
+
+/** Older messages, returned oldest-first so they can be prepended. */
+export async function fetchOlderMessages(
+  type: ChatType,
+  roomId: string,
+  cursor: QueryDocumentSnapshot
+): Promise<{
+  messages: ChatMessage[];
+  cursor: QueryDocumentSnapshot | null;
+  hasMore: boolean;
+}> {
+  const page = await fetchOlderPage(
+    collection(db, chatCollectionPath(type, roomId)),
+    "createdAt",
+    "desc",
+    cursor,
+    PAGE_SIZE.chat,
+    messageMapper
+  );
+  return {
+    messages: [...page.items].reverse(),
+    cursor: page.cursor,
+    hasMore: page.hasMore,
+  };
 }
 
 export async function sendTextMessage(
   type: ChatType,
   roomId: string,
   sender: UserProfile,
-  text: string
+  text: string,
+  replyTo?: MessageReply | null
 ): Promise<void> {
   await addDoc(collection(db, chatCollectionPath(type, roomId)), {
     senderId: sender.id,
     senderUsername: sender.username,
     senderPhoto: sender.profilePhotoUrl,
     text,
+    replyTo: replyTo ?? null,
     createdAt: nowIso(),
   });
+}
+
+/** Edits a message's text and stamps it, so the UI can show "edited". */
+export async function editMessage(
+  type: ChatType,
+  roomId: string,
+  messageId: string,
+  text: string
+): Promise<void> {
+  await updateDoc(doc(db, chatCollectionPath(type, roomId), messageId), {
+    text: text.trim(),
+    editedAt: nowIso(),
+  });
+}
+
+export async function deleteMessage(
+  type: ChatType,
+  roomId: string,
+  messageId: string
+): Promise<void> {
+  await deleteDoc(doc(db, chatCollectionPath(type, roomId), messageId));
 }
 
 export async function sendFileMessage(
   type: ChatType,
   roomId: string,
   sender: UserProfile,
-  file: { url: string; name: string; size: number; type: string }
+  file: { url: string; name: string; size: number; type: string },
+  replyTo?: MessageReply | null
 ): Promise<void> {
   await addDoc(collection(db, chatCollectionPath(type, roomId)), {
     type: "file",
@@ -81,6 +159,7 @@ export async function sendFileMessage(
     fileName: file.name,
     fileSize: file.size,
     fileType: file.type,
+    replyTo: replyTo ?? null,
     createdAt: nowIso(),
   });
 }

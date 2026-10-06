@@ -1,20 +1,33 @@
 import {
+  addDoc,
   collection,
+  collectionGroup,
   doc,
+  documentId,
+  getDoc,
   getDocs,
-  increment,
   limit,
   onSnapshot,
   orderBy,
   query,
   runTransaction,
-  serverTimestamp,
-  setDoc,
-  deleteDoc,
+  updateDoc,
+  where,
+  writeBatch,
+  type QueryDocumentSnapshot,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { EventItem } from "@/types";
+import { adjustUserStat } from "@/lib/services/users";
+import {
+  fetchOlderPage,
+  firstPageQuery,
+  PAGE_SIZE,
+  pageFromDocs,
+  type DocMapper,
+  type Page,
+} from "@/lib/services/pagination";
+import type { EventItem, UserProfile } from "@/types";
 
 const nowIso = () => new Date().toISOString();
 
@@ -27,26 +40,36 @@ export interface NewEventInput {
   coverPhotoUrl?: string | null;
 }
 
+const eventMapper: DocMapper<EventItem> = (id, data) =>
+  ({ id, ...data }) as unknown as EventItem;
+
 export function subscribeToEvents(
-  callback: (events: EventItem[]) => void
+  callback: (page: Page<EventItem>) => void
 ): Unsubscribe {
-  const q = query(
-    collection(db, "events"),
-    orderBy("date", "asc"),
-    limit(30)
+  return onSnapshot(
+    firstPageQuery(collection(db, "events"), "date", "asc", PAGE_SIZE.events),
+    (snap) => callback(pageFromDocs(snap.docs, eventMapper, PAGE_SIZE.events))
   );
-  return onSnapshot(q, (snap) => {
-    callback(
-      snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<EventItem, "id">) }))
-    );
-  });
+}
+
+export async function fetchOlderEvents(
+  cursor: QueryDocumentSnapshot
+): Promise<Page<EventItem>> {
+  // Upcoming first, then later dates — `date` ascending, same as page one.
+  return fetchOlderPage(
+    collection(db, "events"),
+    "date",
+    "asc",
+    cursor,
+    PAGE_SIZE.events,
+    eventMapper
+  );
 }
 
 export async function createEvent(
-  createdBy: string,
+  creator: UserProfile,
   input: NewEventInput
 ): Promise<void> {
-  const { addDoc } = await import("firebase/firestore");
   await addDoc(collection(db, "events"), {
     title: input.title,
     description: input.description,
@@ -55,28 +78,36 @@ export async function createEvent(
     maxAttendees: input.maxAttendees,
     attendeeCount: 0,
     coverPhotoUrl: input.coverPhotoUrl ?? null,
-    createdBy,
+    createdBy: creator.id,
+    // Stored alongside the uid so ownership still resolves for this user after
+    // any future auth-provider change. Existing events simply lack the field.
+    createdByUsername: creator.username,
     createdAt: nowIso(),
   });
 }
 
+/**
+ * Every event the user has joined, from ONE collection-group query.
+ *
+ * The previous implementation loaded up to 200 events and then ran a separate
+ * `attendees` query (up to 500 docs each) per event, and the events page re-ran
+ * the whole thing whenever the event count changed. That is potentially ~100k
+ * document reads to answer "which events am I in?".
+ *
+ * The attendee document id IS the user id, so `documentId()` can filter the
+ * whole collection group in a single round trip — and unlike a denormalised
+ * `attendeeIds` array, this needs no migration: existing data already matches.
+ */
 export async function getJoinedEventIds(userId: string): Promise<Set<string>> {
-  // A user is an attendee doc under each event; query them via collection group.
-  const snap = await getDocs(
-    query(
-      collection(db, "events"),
-      limit(200)
-    )
-  );
   const joined = new Set<string>();
-  await Promise.all(
-    snap.docs.map(async (eventDoc) => {
-      const attendee = await getDocs(
-        query(collection(db, "events", eventDoc.id, "attendees"), limit(500))
-      );
-      if (attendee.docs.some((a) => a.id === userId)) joined.add(eventDoc.id);
-    })
+  const snap = await getDocs(
+    query(collectionGroup(db, "attendees"), where(documentId(), "==", userId))
   );
+  snap.forEach((d) => {
+    // events/{eventId}/attendees/{userId} — two parents up is the event.
+    const eventId = d.ref.parent.parent?.id;
+    if (eventId) joined.add(eventId);
+  });
   return joined;
 }
 
@@ -84,52 +115,99 @@ export async function joinEvent(
   eventId: string,
   userId: string
 ): Promise<void> {
-  await runTransaction(db, async (transaction) => {
+  const joined = await runTransaction(db, async (transaction) => {
     const eventRef = doc(db, "events", eventId);
+    const attendeeRef = doc(db, "events", eventId, "attendees", userId);
+
     const eventDoc = await transaction.get(eventRef);
     if (!eventDoc.exists()) throw new Error("Event not found");
+
+    // Idempotent: a second click must not double-count the seat.
+    const existing = await transaction.get(attendeeRef);
+    if (existing.exists()) return false;
 
     const data = eventDoc.data();
     const current = data.attendeeCount || 0;
     const max = data.maxAttendees as number | undefined;
     if (max && current >= max) throw new Error("Event is full");
 
-    transaction.set(doc(db, "events", eventId, "attendees", userId), {
-      joinedAt: nowIso(),
-    });
+    transaction.set(attendeeRef, { joinedAt: nowIso() });
     transaction.update(eventRef, { attendeeCount: current + 1 });
+    return true;
   });
+
+  // Runs outside the transaction because it needs its own read of the profile.
+  if (joined) await adjustUserStat(userId, "eventsJoined", 1);
 }
 
 export async function leaveEvent(
   eventId: string,
   userId: string
 ): Promise<void> {
-  await runTransaction(db, async (transaction) => {
+  const left = await runTransaction(db, async (transaction) => {
     const eventRef = doc(db, "events", eventId);
+    const attendeeRef = doc(db, "events", eventId, "attendees", userId);
+
     const eventDoc = await transaction.get(eventRef);
     if (!eventDoc.exists()) throw new Error("Event not found");
+
+    const existing = await transaction.get(attendeeRef);
+    if (!existing.exists()) return false;
+
     const current = eventDoc.data().attendeeCount || 0;
-    transaction.delete(doc(db, "events", eventId, "attendees", userId));
+    transaction.delete(attendeeRef);
     transaction.update(eventRef, { attendeeCount: Math.max(0, current - 1) });
+    return true;
   });
+
+  if (left) await adjustUserStat(userId, "eventsJoined", -1);
 }
 
+/**
+ * Whether the user is an attendee of one event.
+ *
+ * A direct document read (1 read) rather than fetching every attendee. Prefer
+ * `getJoinedEventIds` when checking more than one event at a time.
+ */
 export async function hasJoinedEvent(
   eventId: string,
   userId: string
 ): Promise<boolean> {
-  const snap = await getDocs(
-    query(collection(db, "events", eventId, "attendees"), limit(500))
-  );
-  return snap.docs.some((d) => d.id === userId);
+  const snap = await getDoc(doc(db, "events", eventId, "attendees", userId));
+  return snap.exists();
 }
 
 export async function getEvent(eventId: string): Promise<EventItem | null> {
-  const { getDoc } = await import("firebase/firestore");
   const snap = await getDoc(doc(db, "events", eventId));
   if (!snap.exists()) return null;
   return { id: snap.id, ...(snap.data() as Omit<EventItem, "id">) };
 }
 
-export { increment, setDoc, serverTimestamp, deleteDoc };
+/** Partially updates an event. Only the creator should call this (see rules). */
+export async function updateEvent(
+  eventId: string,
+  input: Partial<NewEventInput>
+): Promise<void> {
+  await updateDoc(doc(db, "events", eventId), input);
+}
+
+/**
+ * Deletes an event *and* its attendee documents.
+ *
+ * Firestore has no cascade delete: leaving the `attendees` subcollection behind
+ * would both orphan data and keep matching the collection-group query that works
+ * out which events a user has joined — so a deleted event would still show as
+ * "registered" on their profile.
+ *
+ * Capped at 400 attendee docs per commit, comfortably inside the 500-write
+ * batch limit. An event larger than that is not a realistic campus case.
+ */
+export async function deleteEvent(eventId: string): Promise<void> {
+  const attendees = await getDocs(
+    query(collection(db, "events", eventId, "attendees"), limit(400))
+  );
+  const batch = writeBatch(db);
+  attendees.forEach((attendee) => batch.delete(attendee.ref));
+  batch.delete(doc(db, "events", eventId));
+  await batch.commit();
+}

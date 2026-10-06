@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2 } from "lucide-react";
+import { ImagePlus, Loader2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,14 +14,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createEvent } from "@/lib/services/events";
+import { compressImage, uploadCoverImage } from "@/lib/services/storage";
+import {
+  acceptAttribute,
+  checkUpload,
+  IMAGE_UPLOAD_POLICY,
+} from "@/lib/upload-policy";
 import { toast } from "sonner";
+import type { UserProfile } from "@/types";
 
 export function CreateEventDialog({
-  currentUserId,
+  currentUser,
   open,
   onOpenChange,
 }: {
-  currentUserId: string;
+  currentUser: UserProfile;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -30,7 +37,30 @@ export function CreateEventDialog({
   const [location, setLocation] = React.useState("");
   const [date, setDate] = React.useState("");
   const [maxAttendees, setMaxAttendees] = React.useState("50");
+  const [cover, setCover] = React.useState<File | null>(null);
+  const [preview, setPreview] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
+  const coverInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (!cover) {
+      setPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(cover);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [cover]);
+
+  const handleCoverPick = (file: File | undefined) => {
+    if (!file) return;
+    const check = checkUpload(file, IMAGE_UPLOAD_POLICY);
+    if (!check.ok) {
+      toast.error(check.reason);
+      return;
+    }
+    setCover(file);
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -40,35 +70,102 @@ export function CreateEventDialog({
     }
     setSaving(true);
     try {
-      await createEvent(currentUserId, {
+      let coverPhotoUrl: string | null = null;
+      if (cover) {
+        const compressed = await compressImage(cover);
+        coverPhotoUrl = await uploadCoverImage(
+          "events",
+          currentUser.id,
+          compressed
+        );
+      }
+
+      await createEvent(currentUser, {
         title: title.trim(),
         description: description.trim(),
         location: location.trim(),
         date: new Date(date).toISOString(),
         maxAttendees: Number(maxAttendees) || 1,
+        coverPhotoUrl,
       });
+
       toast.success("Event created!");
       setTitle("");
       setDescription("");
       setLocation("");
       setDate("");
       setMaxAttendees("50");
+      setCover(null);
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to create event.");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create event."
+      );
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!saving) onOpenChange(next);
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create an event</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label>Cover image</Label>
+            {preview ? (
+              <div className="relative mt-1.5 overflow-hidden rounded-lg border">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={preview}
+                  alt="Event cover preview"
+                  className="h-36 w-full object-cover"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="absolute right-2 top-2 h-7 w-7"
+                  onClick={() => setCover(null)}
+                  aria-label="Remove cover image"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-1.5 gap-2"
+                onClick={() => coverInputRef.current?.click()}
+              >
+                <ImagePlus className="h-4 w-4" /> Add a cover
+              </Button>
+            )}
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept={acceptAttribute(IMAGE_UPLOAD_POLICY)}
+              className="hidden"
+              onChange={(e) => {
+                handleCoverPick(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Optional. Shown as the event's banner.
+            </p>
+          </div>
+
           <div>
             <Label htmlFor="e-title">Title *</Label>
             <Input

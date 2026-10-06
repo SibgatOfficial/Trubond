@@ -1,0 +1,258 @@
+rules_version = '2';
+
+// Trubond Firestore security rules.
+//
+// The central idea: several actions write to a document the acting user does
+// NOT own. Liking a post writes `posts/{id}.likeCount`; following someone writes
+// `users/{them}.followerCount`. Firestore batches are atomic, so denying that one
+// write silently kills the whole action.
+//
+// Rather than opening those documents up, each such rule allows an update only
+// when the changed keys are EXACTLY the counter fields:
+//
+//   request.resource.data.diff(resource.data).affectedKeys().hasOnly([...])
+//
+// That lets anyone move a counter while still preventing them from editing the
+// content or the ownership fields.
+//
+// Known trade-off: because there is no server (the app is a static export with
+// no Cloud Functions), follower/following counts are technically inflatable by a
+// determined client. Validating them server-side would require a backend.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    /** The set of fields an update actually changed. */
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // ---------- USERS ----------
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId);
+
+      // Own profile: any field. Someone else's: ONLY the follow counters, which
+      // follow() / unfollow() must be able to move.
+      allow update: if isOwner(userId) || (
+        isSignedIn() &&
+        changedKeys().hasOnly(['followerCount', 'followingCount'])
+      );
+
+      allow delete: if isOwner(userId);
+    }
+
+    // ---------- USERNAME LOCK ----------
+    match /usernames/{username} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+                    && resource.data.userId == request.auth.uid;
+    }
+
+    // ---------- POSTS ----------
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.authorId == request.auth.uid;
+
+      // The author may edit anything. Everyone else may only move the counters —
+      // like / comment / view all write the parent post in the same batch as the
+      // sub-document, so this is what makes reacting to someone else's post work.
+      allow update: if isSignedIn() && (
+        resource.data.authorId == request.auth.uid ||
+        changedKeys().hasOnly(['likeCount', 'commentCount', 'viewCount'])
+      );
+
+      allow delete: if isSignedIn()
+                    && resource.data.authorId == request.auth.uid;
+
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn()
+                      && request.resource.data.authorId == request.auth.uid;
+        allow update, delete: if isSignedIn()
+                      && resource.data.authorId == request.auth.uid;
+      }
+
+      match /likes/{userId} {
+        allow read: if isSignedIn();
+        allow create, delete: if isOwner(userId);
+        allow update: if false;
+      }
+
+      match /views/{userId} {
+        allow read: if isSignedIn();
+        allow create: if isOwner(userId);
+        allow update, delete: if false;
+      }
+    }
+
+    // ---------- FOLLOWS ----------
+    // Deterministic id `{followerId}_{followingId}`; only the follower may
+    // create or remove it, and it is never editable.
+    match /follows/{followId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.followerId == request.auth.uid;
+      allow delete: if isSignedIn()
+                    && resource.data.followerId == request.auth.uid;
+      allow update: if false;
+    }
+
+    // ---------- NOTIFICATIONS ----------
+    // Written by the actor, read and cleared by the recipient. A flat collection
+    // (not a per-user subcollection) is what makes this rule expressible without
+    // letting one user write inside another user's document tree.
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn()
+                  && resource.data.recipientId == request.auth.uid;
+      allow create: if isSignedIn()
+                    && request.resource.data.actorId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+                    && resource.data.recipientId == request.auth.uid;
+    }
+
+    // ---------- NOTES ----------
+    match /notes/{noteId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.uploaderId == request.auth.uid;
+
+      // Same counter-only escape hatch as posts: upvoting and downloading write
+      // the parent note from someone else's session.
+      allow update: if isSignedIn() && (
+        resource.data.uploaderId == request.auth.uid ||
+        changedKeys().hasOnly(['upvoteCount', 'downloadCount', 'commentCount'])
+      );
+
+      allow delete: if isSignedIn()
+                    && resource.data.uploaderId == request.auth.uid;
+
+      match /upvotes/{userId} {
+        allow read: if isSignedIn();
+        allow create, delete: if isOwner(userId);
+        allow update: if false;
+      }
+
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn()
+                      && request.resource.data.authorId == request.auth.uid;
+        allow update, delete: if isSignedIn()
+                      && resource.data.authorId == request.auth.uid;
+      }
+    }
+
+    // ---------- PROJECTS ----------
+    match /projects/{projectId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.ownerId == request.auth.uid;
+
+      // Any signed-in user may change the roster (join / leave / approve), but
+      // only the owner may rewrite the project's own content.
+      allow update: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        changedKeys().hasOnly(['members'])
+      );
+
+      allow delete: if isSignedIn()
+                    && resource.data.ownerId == request.auth.uid;
+
+      match /requests/{requestId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn()
+                      && request.resource.data.userId == request.auth.uid;
+        // Only the project owner may approve, deny or remove a request.
+        allow update, delete: if isSignedIn() &&
+          get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId
+            == request.auth.uid;
+      }
+    }
+
+    // ---------- EVENTS ----------
+    match /events/{eventId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.createdBy == request.auth.uid;
+
+      // attendeeCount moves for everyone; every other field stays the creator's.
+      allow update: if isSignedIn() && (
+        resource.data.createdBy == request.auth.uid ||
+        changedKeys().hasOnly(['attendeeCount'])
+      );
+
+      allow delete: if isSignedIn()
+                    && resource.data.createdBy == request.auth.uid;
+
+      match /attendees/{userId} {
+        allow read: if isSignedIn();
+        allow create: if isOwner(userId);
+        // The event creator must be able to clear registrations when they
+        // delete the event — otherwise deleteEvent() fails for any event that
+        // has other people registered.
+        allow delete: if isOwner(userId) ||
+          get(/databases/$(database)/documents/events/$(eventId)).data.createdBy
+            == request.auth.uid;
+        allow update: if false;
+      }
+    }
+
+    // ---------- CHAT ----------
+    // Authors may edit or delete their own messages. Poll voting still works
+    // because votePoll() writes only the `poll` field.
+    //
+    // Ownership also matches on username: messages sent before the phone→Google
+    // auth migration carry the sender's OLD uid, so a uid-only check would stop
+    // people editing their own history.
+    function authoredMessage() {
+      return isSignedIn() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.senderUsername ==
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username
+      );
+    }
+
+    match /global_chat/{roomId}/messages/{messageId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.senderId == request.auth.uid;
+      allow update: if authoredMessage() ||
+        (isSignedIn() && changedKeys().hasOnly(['poll']));
+      allow delete: if authoredMessage();
+    }
+
+    match /branch_chats/{roomId}/messages/{messageId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.senderId == request.auth.uid;
+      allow update: if authoredMessage() ||
+        (isSignedIn() && changedKeys().hasOnly(['poll']));
+      allow delete: if authoredMessage();
+    }
+
+    match /project_chats/{roomId}/messages/{messageId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.senderId == request.auth.uid;
+      allow update: if authoredMessage() ||
+        (isSignedIn() && changedKeys().hasOnly(['poll']));
+      allow delete: if authoredMessage();
+    }
+
+    // ---------- DEFAULT DENY ----------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

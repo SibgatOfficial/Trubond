@@ -2,9 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { GraduationCap, Loader2, Users, Zap } from "lucide-react";
+import { GraduationCap, Loader2, ShieldCheck, Users, Zap } from "lucide-react";
 import { useAuth } from "@/context/auth-provider";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { toast } from "sonner";
 
 function GoogleIcon({ className }: { className?: string }) {
@@ -30,6 +32,24 @@ function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
+const HIGHLIGHTS = [
+  {
+    icon: Users,
+    title: "Connect",
+    body: "Find classmates across every branch and year.",
+  },
+  {
+    icon: Zap,
+    title: "Collaborate",
+    body: "Team up on projects and share notes instantly.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Verified",
+    body: "Google sign-in only — no throwaway accounts.",
+  },
+] as const;
+
 export default function LoginPage() {
   const { user, profile, loading, signInWithGoogle } = useAuth();
   const router = useRouter();
@@ -45,7 +65,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await signInWithGoogle();
-      toast.success("Signed in — welcome to Trubond!");
+      toast.success(`Signed in — welcome to ${APP_NAME}!`);
     } catch (error) {
       console.error(error);
       toast.error("Google sign-in failed. Please try again.");
@@ -55,66 +75,110 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4">
-      <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary/20 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
-
-      <div className="relative z-10 w-full max-w-md animate-fade-in">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30">
-            <GraduationCap className="h-8 w-8" />
-          </div>
-          <h1 className="font-display text-3xl font-bold text-foreground">
-            Trubond
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            College Networking Platform
-          </p>
-        </div>
-
-        <div className="rounded-2xl border bg-card p-8 shadow-xl shadow-slate-200/60">
-          <h2 className="text-center text-xl font-semibold">
-            Welcome back
-          </h2>
-          <p className="mt-1 text-center text-sm text-muted-foreground">
-            Sign in with your Google account to continue.
-          </p>
-
-          <Button
-            variant="outline"
-            size="lg"
-            className="mt-6 w-full gap-3 border-slate-200 text-base font-medium"
-            onClick={handleSignIn}
-            disabled={submitting || loading}
-          >
-            {submitting ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <GoogleIcon className="h-5 w-5" />
-            )}
-            Continue with Google
-          </Button>
-
-          <div className="mt-6 grid grid-cols-3 gap-3 text-center text-xs text-muted-foreground">
-            <div className="rounded-lg bg-muted/60 p-3">
-              <Users className="mx-auto mb-1 h-4 w-4 text-primary" />
-              Connect
-            </div>
-            <div className="rounded-lg bg-muted/60 p-3">
-              <Zap className="mx-auto mb-1 h-4 w-4 text-primary" />
-              Collaborate
-            </div>
-            <div className="rounded-lg bg-muted/60 p-3">
-              <GraduationCap className="mx-auto mb-1 h-4 w-4 text-primary" />
-              Grow
-            </div>
-          </div>
-        </div>
-
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          By continuing you agree to Trubond&apos;s community guidelines.
-        </p>
+    // Every colour here is a semantic token, so this page follows the theme.
+    // (The pre-auth pages used to hardcode a light gradient, which rendered
+    // near-white text on white in dark mode.)
+    <main className="relative grid min-h-screen bg-background lg:grid-cols-2">
+      <div className="absolute right-4 top-4 z-20">
+        <ThemeToggle />
       </div>
+
+      {/* Brand panel — desktop only */}
+      <section className="relative hidden overflow-hidden bg-gradient-to-br from-primary to-primary/75 p-12 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
+        <div className="pointer-events-none absolute -right-20 top-1/4 h-72 w-72 rounded-full bg-primary-foreground/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-16 bottom-10 h-64 w-64 rounded-full bg-primary-foreground/10 blur-3xl" />
+
+        <div className="relative flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-foreground/15 backdrop-blur">
+            <GraduationCap className="h-6 w-6" />
+          </span>
+          <span className="font-display text-2xl font-bold">{APP_NAME}</span>
+        </div>
+
+        <div className="relative max-w-md space-y-8">
+          <div>
+            <h1 className="font-display text-4xl font-bold leading-tight">
+              Your campus, connected.
+            </h1>
+            <p className="mt-3 text-base text-primary-foreground/80">
+              {APP_TAGLINE} — feeds, notes, projects, events and real-time chat
+              in one place.
+            </p>
+          </div>
+
+          <ul className="space-y-5">
+            {HIGHLIGHTS.map((item) => (
+              <li key={item.title} className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15">
+                  <item.icon className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="font-semibold">{item.title}</p>
+                  <p className="text-sm text-primary-foreground/75">
+                    {item.body}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="relative text-xs text-primary-foreground/60">
+          © {new Date().getFullYear()} {APP_NAME}. Built for students.
+        </p>
+      </section>
+
+      {/* Auth panel */}
+      <section className="flex items-center justify-center px-4 py-14">
+        <div className="w-full max-w-md animate-fade-in">
+          <div className="mb-8 text-center lg:hidden">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30">
+              <GraduationCap className="h-8 w-8" />
+            </div>
+            <h1 className="font-display text-3xl font-bold text-foreground">
+              {APP_NAME}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">{APP_TAGLINE}</p>
+          </div>
+
+          <div className="rounded-2xl border bg-card p-8 shadow-xl shadow-black/5 dark:shadow-black/40">
+            <h2 className="text-center text-xl font-semibold text-card-foreground">
+              Welcome back
+            </h2>
+            <p className="mt-1 text-center text-sm text-muted-foreground">
+              Sign in with your Google account to continue.
+            </p>
+
+            <Button
+              variant="outline"
+              size="lg"
+              className="mt-6 w-full gap-3 text-base font-medium"
+              onClick={handleSignIn}
+              disabled={submitting || loading}
+            >
+              {submitting ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <GoogleIcon className="h-5 w-5" />
+              )}
+              {submitting ? "Signing in…" : "Continue with Google"}
+            </Button>
+
+            <div className="mt-6 grid grid-cols-3 gap-3 text-center text-xs text-muted-foreground">
+              {HIGHLIGHTS.map((item) => (
+                <div key={item.title} className="rounded-lg bg-muted/60 p-3">
+                  <item.icon className="mx-auto mb-1 h-4 w-4 text-primary" />
+                  {item.title}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            By continuing you agree to {APP_NAME}&apos;s community guidelines.
+          </p>
+        </div>
+      </section>
     </main>
   );
 }

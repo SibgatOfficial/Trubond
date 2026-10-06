@@ -12,6 +12,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { ChatType, UserProfile } from "@/types";
 import { createPoll } from "@/lib/services/chat";
 import { toast } from "sonner";
@@ -92,11 +99,13 @@ export function CreatePollDialog({
                   value={option}
                   onChange={(e) => updateOption(index, e.target.value)}
                   placeholder={`Option ${index + 1}`}
+                  aria-label={`Poll option ${index + 1}`}
                 />
                 {options.length > 2 && (
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={`Remove option ${index + 1}`}
                     onClick={() =>
                       setOptions((prev) => prev.filter((_, i) => i !== index))
                     }
@@ -120,17 +129,17 @@ export function CreatePollDialog({
 
           <div>
             <Label htmlFor="poll-duration">Duration (days)</Label>
-            <select
-              id="poll-duration"
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="1">1 day</option>
-              <option value="3">3 days</option>
-              <option value="7">1 week</option>
-              <option value="30">1 month</option>
-            </select>
+            <Select value={duration} onValueChange={setDuration}>
+              <SelectTrigger id="poll-duration" className="mt-1.5">
+                <SelectValue placeholder="Select duration" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 day</SelectItem>
+                <SelectItem value="3">3 days</SelectItem>
+                <SelectItem value="7">1 week</SelectItem>
+                <SelectItem value="30">1 month</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>

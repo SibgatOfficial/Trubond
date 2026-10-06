@@ -82,7 +82,29 @@
   }
 }
 
+/* Respect the OS "reduce motion" setting: transitions and animations collapse
+   instead of playing. Lottie playback is handled separately in
+   components/ui/lottie-animation.tsx. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @layer utilities {
+  /* Intentional non-theming surface: a QR code needs a white quiet zone to
+     stay scannable, so this deliberately ignores the active theme. Keeping it
+     in CSS (rather than a `bg-white` class) also keeps `npm run check:theme`
+     free of exceptions. */
+  .qr-surface {
+    background-color: #ffffff;
+  }
+
   .scrollbar-thin::-webkit-scrollbar {
     width: 8px;
     height: 8px;

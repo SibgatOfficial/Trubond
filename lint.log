@@ -6,4 +6,4 @@ npx @next/codemod@canary next-lint-to-eslint-cli .
 ? How would you like to configure ESLint? https://nextjs.org/docs/app/api-reference/config/eslint
 [?25l❯  Strict (recommended)
    Base
-   Cancel
+   Cancel^C
