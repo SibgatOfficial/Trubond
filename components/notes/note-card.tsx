@@ -2,8 +2,10 @@
 
 import * as React from "react";
 import {
-  ArrowBigUp,
   Download,
+  ExternalLink,
+  FileText,
+  Heart,
   MessageCircle,
   MoreHorizontal,
   Pencil,
@@ -33,7 +35,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { deleteNote, incrementNoteDownload } from "@/lib/services/notes";
-import { timeAgo, isOwnedBy } from "@/lib/utils";
+import { cloudinaryPdfPageUrl, timeAgo, isOwnedBy } from "@/lib/utils";
 import type { Note, UserProfile } from "@/types";
 import { toast } from "sonner";
 
@@ -152,19 +154,43 @@ export function NoteCard({
 
         {note.files?.length ? (
           <div className="space-y-2">
-            {note.files.map((file) => (
-              <FileChip
-                key={`${file.url}-${file.name}`}
-                file={file}
-                onDownload={handleDownload}
-              />
-            ))}
+            {note.files.map((file) => {
+              const preview = cloudinaryPdfPageUrl(file.url);
+              return (
+                <div key={`${file.url}-${file.name}`} className="space-y-1.5">
+                  <FileChip file={file} onDownload={handleDownload} />
+                  {preview ? (
+                    <div className="overflow-hidden rounded-lg border">
+                      <div className="flex items-center gap-1.5 border-b bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+                        <FileText className="h-3.5 w-3.5" />
+                        <span className="truncate">Preview</span>
+                        <a
+                          href={file.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={handleDownload}
+                          className="ml-auto inline-flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" /> Open
+                        </a>
+                      </div>
+                      <img
+                        src={preview}
+                        alt={`First page preview of ${file.name}`}
+                        className="max-h-64 w-full bg-muted/30 object-contain"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         ) : null}
 
         <div className="flex items-center gap-1 border-t pt-3 text-sm text-muted-foreground">
           <ReactionButton
-            icon={ArrowBigUp}
+            icon={Heart}
             label={upvoted ? "Remove upvote" : "Upvote this note"}
             count={note.upvoteCount ?? 0}
             active={upvoted}

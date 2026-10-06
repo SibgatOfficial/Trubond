@@ -2,11 +2,19 @@
 
 import * as React from "react";
 import jsQR from "jsqr";
+import { useSearchParams } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
-import { Camera, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { Camera, CheckCircle2, Loader2, ScanLine, XCircle } from "lucide-react";
 import { db } from "@/lib/firebase";
+import { useAuth } from "@/context/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/empty-state";
+import { getEvent, recordEventScan } from "@/lib/services/events";
+import { notifySafely } from "@/lib/services/notifications";
+import { formatTimestamp, isOwnedBy } from "@/lib/utils";
+import type { EventItem } from "@/types";
+import { toast } from "sonner";
 
 type ScanResult =
   | { status: "success"; title: string; details: string[] }
@@ -14,6 +22,9 @@ type ScanResult =
   | null;
 
 export default function ScanPage() {
+  const searchParams = useSearchParams();
+  const eventId = searchParams.get("eventId") ?? "";
+  const { profile } = useAuth();
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
@@ -22,6 +33,33 @@ export default function ScanPage() {
   const [scanning, setScanning] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<ScanResult>(null);
+  const [event, setEvent] = React.useState<EventItem | null>(null);
+  const [loadingEvent, setLoadingEvent] = React.useState(Boolean(eventId));
+
+  React.useEffect(() => {
+    if (!eventId) return;
+    let active = true;
+    setLoadingEvent(true);
+    getEvent(eventId)
+      .then((item) => {
+        if (active) setEvent(item);
+      })
+      .catch((err) => {
+        console.error(err);
+        if (active) setError("Couldn't load that event.");
+      })
+      .finally(() => {
+        if (active) setLoadingEvent(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [eventId]);
+
+  const isOwner =
+    profile && event
+      ? isOwnedBy(event.createdBy, event.createdByUsername, profile)
+      : false;
 
   const stopScanner = React.useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -43,10 +81,14 @@ export default function ScanPage() {
         if (!data.eventId || !data.userId || !data.username) {
           throw new Error("Invalid QR code format");
         }
+        // Event-specific scanner: a ticket for event A never verifies at event B.
+        if (eventId && data.eventId !== eventId) {
+          throw new Error("This ticket is for a different event");
+        }
 
         const eventDoc = await getDoc(doc(db, "events", data.eventId));
         if (!eventDoc.exists()) throw new Error("Event not found");
-        const event = eventDoc.data();
+        const eventData = eventDoc.data();
 
         const attendeeDoc = await getDoc(
           doc(db, "events", data.eventId, "attendees", data.userId)
@@ -55,15 +97,38 @@ export default function ScanPage() {
           throw new Error("User is not registered for this event");
         }
 
+        const scan = await recordEventScan(data.eventId, {
+          userId: data.userId,
+          username: data.username,
+          name: data.name,
+        });
+
+        if (profile && data.userId) {
+          notifySafely({
+            recipientId: data.userId,
+            actor: profile,
+            type: "event_scan",
+            targetId: data.eventId,
+            href: "/events",
+            text: scan.alreadyScanned
+              ? "your ticket was scanned again"
+              : "you checked in",
+          });
+        }
+
+        const at = new Date(scan.scannedAt).toLocaleString();
         setResult({
           status: "success",
-          title: "Ticket verified",
+          title: scan.alreadyScanned
+            ? "Already checked in"
+            : "Ticket verified",
           details: [
-            `Event: ${event.title as string}`,
+            `Event: ${eventData.title as string}`,
             `Name: ${data.name ?? "—"}`,
             `Username: @${data.username}`,
-            `Location: ${(event.location as string) ?? "—"}`,
-            `Scanned: ${new Date().toLocaleString()}`,
+            scan.alreadyScanned
+              ? `First checked in: ${at} — no double count`
+              : `Checked in: ${at}`,
           ],
         });
         stopScanner();
@@ -79,7 +144,7 @@ export default function ScanPage() {
         stopScanner();
       }
     },
-    [stopScanner]
+    [stopScanner, eventId, profile]
   );
 
   const startScanner = React.useCallback(async () => {
@@ -134,10 +199,38 @@ export default function ScanPage() {
       <div className="text-center">
         <h1 className="font-display text-2xl font-bold">QR Ticket Scanner</h1>
         <p className="text-sm text-muted-foreground">
-          Scan an attendee&apos;s ticket to verify it.
+          {event ? (
+            <>
+              Scanning for <span className="font-medium text-foreground">{event.title}</span>
+              {event.location ? ` · ${event.location}` : ""} ·{" "}
+              {formatTimestamp(event.startsAt ?? event.date)}
+            </>
+          ) : (
+            "Scan an attendee's ticket to verify it."
+          )}
         </p>
       </div>
 
+      {loadingEvent ? (
+        <Card>
+          <CardContent className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading event…
+          </CardContent>
+        </Card>
+      ) : eventId && !event ? (
+        <EmptyState
+          icon={ScanLine}
+          title="Event not found"
+          description="That scan link doesn't match any event."
+        />
+      ) : eventId && event && profile && !isOwner ? (
+        <EmptyState
+          icon={ScanLine}
+          title="Organizers only"
+          description="Only the event organizer can scan tickets for this event. Everyone else sees the checked-in count on the event card."
+        />
+      ) : (
+        <>
       <Card>
         <CardContent className="space-y-4 p-4">
           <div className="relative aspect-square w-full overflow-hidden rounded-xl border bg-black/90">
@@ -208,6 +301,8 @@ export default function ScanPage() {
             </Button>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
     </div>
   );

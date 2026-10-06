@@ -226,6 +226,25 @@ export async function denyRequest(
   await deleteDoc(doc(db, "projects", projectId, "requests", requestId));
 }
 
+/**
+ * Lets a user cancel their OWN pending request.
+ * Rules allow deleting when `resource.data.userId == auth.uid`.
+ */
+export async function cancelRequest(
+  projectId: string,
+  userId: string
+): Promise<void> {
+  const snap = await getDocs(
+    query(
+      collection(db, "projects", projectId, "requests"),
+      where("userId", "==", userId),
+      where("status", "==", "pending"),
+      limit(5)
+    )
+  );
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+}
+
 export async function leaveProject(
   projectId: string,
   userId: string

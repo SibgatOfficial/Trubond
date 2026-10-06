@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   fetchOlderProjects,
+  cancelRequest,
   getRequestedProjectIds,
   leaveProject,
   requestToJoin,
@@ -85,6 +86,21 @@ export default function ProjectsPage() {
     } catch (error) {
       console.error(error);
       toast.error("Failed to send request.");
+    }
+  };
+
+  const handleCancelRequest = async (project: Project) => {
+    try {
+      await cancelRequest(project.id, profile.id);
+      setPending((prev) => {
+        const next = new Set(prev);
+        next.delete(project.id);
+        return next;
+      });
+      toast.success("Request cancelled.");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to cancel request.");
     }
   };
 

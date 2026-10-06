@@ -3,13 +3,17 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   limit,
   onSnapshot,
   orderBy,
   query,
   runTransaction,
+  serverTimestamp,
+  setDoc,
   updateDoc,
+  where,
   type QueryDocumentSnapshot,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -34,6 +38,8 @@ export function chatCollectionPath(type: ChatType, roomId: string): string {
       return `branch_chats/${roomId}/messages`;
     case "project":
       return `project_chats/${roomId}/messages`;
+    case "dm":
+      return `dm_threads/${roomId}/messages`;
     default:
       throw new Error(`Unknown chat type: ${type}`);
   }
@@ -148,13 +154,15 @@ export async function sendFileMessage(
   roomId: string,
   sender: UserProfile,
   file: { url: string; name: string; size: number; type: string },
-  replyTo?: MessageReply | null
+  replyTo?: MessageReply | null,
+  caption?: string
 ): Promise<void> {
   await addDoc(collection(db, chatCollectionPath(type, roomId)), {
     type: "file",
     senderId: sender.id,
     senderUsername: sender.username,
     senderPhoto: sender.profilePhotoUrl,
+    text: caption?.trim() ? caption.trim() : "",
     fileUrl: file.url,
     fileName: file.name,
     fileSize: file.size,
@@ -260,7 +268,7 @@ export async function votePoll(
   });
 }
 
-/** Global + branch + project chat rooms the user can access. */
+/** Global + branch + project + DM rooms the user can access. */
 export async function getChatRooms(user: UserProfile): Promise<ChatRoom[]> {
   const rooms: ChatRoom[] = [
     {
@@ -303,5 +311,107 @@ export async function getChatRooms(user: UserProfile): Promise<ChatRoom[]> {
     /* ignore project room errors */
   }
 
+  // Personal DMs the user participates in — pending requests show as
+  // "DM request from @user" so the recipient knows to approve.
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, "dm_threads"),
+        where("participantIds", "array-contains", user.id),
+        limit(50)
+      )
+    );
+    snap.forEach((d) => {
+      const data = d.data();
+      const other =
+        (data.participantUsernames as string[] ?? []).find(
+          (name) => name !== user.username
+        ) ?? "user";
+      const status = data.status as string | undefined;
+      rooms.push({
+        id: d.id,
+        type: "dm",
+        name:
+          status === "pending"
+            ? `DM request · @${other}`
+            : `@${other}`,
+        subtitle:
+          status === "pending" ? "Tap to accept or decline" : "Direct message",
+        status: (status as ChatRoom["status"]) ?? "accepted",
+        recipientId: data.recipientId as string | undefined,
+        requesterId: data.requesterId as string | undefined,
+      });
+    });
+  } catch {
+    /* DMs unavailable — rules not deployed yet, or offline */
+  }
+
   return rooms;
+}
+
+/**
+ * Personal DM request flow.
+ *
+ * Thread id is deterministic (`min_uid__max_uid`) so two users can only ever
+ * share one thread, no matter who messages first. The first message creates a
+ * `pending` thread; the recipient accepts before normal chat continues.
+ */
+export function dmThreadId(a: string, b: string): string {
+  return [a, b].sort().join("__");
+}
+
+export async function getDmThread(
+  threadId: string
+): Promise<import("@/types").DmThread | null> {
+  const snap = await getDoc(doc(db, "dm_threads", threadId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...(snap.data() as Omit<import("@/types").DmThread, "id">) };
+}
+
+export async function sendDmMessage(
+  otherUser: { id: string; username: string },
+  me: UserProfile,
+  text: string
+): Promise<string> {
+  const threadId = dmThreadId(me.id, otherUser.id);
+  const ref = doc(db, "dm_threads", threadId);
+  const existing = await getDoc(ref);
+  if (!existing.exists()) {
+    await setDoc(ref, {
+      participantIds: [me.id, otherUser.id],
+      participantUsernames: [me.username, otherUser.username],
+      requesterId: me.id,
+      recipientId: otherUser.id,
+      status: "pending",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+  await addDoc(collection(db, `dm_threads/${threadId}/messages`), {
+    senderId: me.id,
+    senderUsername: me.username,
+    senderPhoto: me.profilePhotoUrl,
+    text,
+    replyTo: null,
+    createdAt: new Date().toISOString(),
+  });
+  await updateDoc(ref, { updatedAt: serverTimestamp() });
+  return threadId;
+}
+
+export async function respondToDmRequest(
+  threadId: string,
+  accept: boolean
+): Promise<void> {
+  if (accept) {
+    await updateDoc(doc(db, "dm_threads", threadId), {
+      status: "accepted",
+      updatedAt: serverTimestamp(),
+    });
+  } else {
+    await updateDoc(doc(db, "dm_threads", threadId), {
+      status: "blocked",
+      updatedAt: serverTimestamp(),
+    });
+  }
 }

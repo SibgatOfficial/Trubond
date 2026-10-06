@@ -10,6 +10,13 @@ export interface UserProfile {
   email: string;
   about: string;
   profilePhotoUrl: string;
+  coverPhotoUrl?: string | null;
+  socialLinks?: {
+    linkedin?: string;
+    portfolio?: string;
+    github?: string;
+    website?: string;
+  };
   branch: string;
   startYear: number | null;
   passingYear: number | null;
@@ -56,6 +63,7 @@ export interface Comment {
    * comment. Absent on comments written before replies existed.
    */
   parentId?: string | null;
+  replyToUsername?: string | null;
 }
 
 export interface Project {
@@ -88,8 +96,11 @@ export interface EventItem {
   description: string;
   location: string;
   date: FirestoreDate;
+  startsAt?: FirestoreDate;
+  endsAt?: FirestoreDate;
   maxAttendees: number;
   attendeeCount: number;
+  scanCount?: number;
   coverPhotoUrl?: string | null;
   createdBy?: string;
   /**
@@ -105,6 +116,15 @@ export interface Attendee {
   id: string;
   username?: string;
   name?: string;
+  joinedAt?: FirestoreDate;
+}
+
+export interface EventScan {
+  id: string;
+  userId: string;
+  username?: string;
+  name?: string;
+  scannedAt?: FirestoreDate;
   joinedAt?: FirestoreDate;
 }
 
@@ -158,13 +178,16 @@ export interface ChatMessage {
   replyTo?: MessageReply | null;
 }
 
-export type ChatType = "global" | "branch" | "project";
+export type ChatType = "global" | "branch" | "project" | "dm";
 
 export interface ChatRoom {
   id: string;
   type: ChatType;
   name: string;
   subtitle?: string;
+  status?: "pending" | "accepted" | "blocked";
+  recipientId?: string;
+  requesterId?: string;
 }
 
 /** A file attached to a note. Mirrors the chat attachment shape. */
@@ -213,14 +236,33 @@ export interface NoteComment {
   authorPhoto?: string;
   text: string;
   createdAt: FirestoreDate;
+  parentId?: string | null;
+  replyToUsername?: string | null;
+}
+
+export interface DmThread {
+  id: string;
+  participantIds: string[];
+  participantUsernames: string[];
+  requesterId: string;
+  recipientId: string;
+  status: "pending" | "accepted" | "blocked";
+  createdAt: FirestoreDate;
+  updatedAt: FirestoreDate;
 }
 
 export type NotificationType =
   | "like"
   | "comment"
+  | "reply"
   | "follow"
   | "note_upvote"
-  | "project_approved";
+  | "note_comment"
+  | "project_approved"
+  | "event_registration"
+  | "event_scan"
+  | "dm_request"
+  | "dm_accepted";
 
 /**
  * An in-app notification, stored at `notifications/{id}`.

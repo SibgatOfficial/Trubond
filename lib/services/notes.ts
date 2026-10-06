@@ -227,7 +227,9 @@ export function subscribeToNoteComments(
 export async function addNoteComment(
   noteId: string,
   author: UserProfile,
-  text: string
+  text: string,
+  parentId?: string | null,
+  replyToUsername?: string | null
 ): Promise<void> {
   const batch = writeBatch(db);
   batch.set(doc(collection(db, "notes", noteId, "comments")), {
@@ -235,6 +237,8 @@ export async function addNoteComment(
     authorUsername: author.username,
     authorPhoto: author.profilePhotoUrl,
     text: text.trim(),
+    parentId: parentId ?? null,
+    replyToUsername: replyToUsername ?? null,
     createdAt: nowIso(),
   });
   batch.update(doc(db, "notes", noteId), { commentCount: increment(1) });

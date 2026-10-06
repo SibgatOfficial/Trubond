@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { CalendarX2, Plus } from "lucide-react";
 import { useAuth } from "@/context/auth-provider";
 import { EventCard } from "@/components/events/event-card";
 import { CreateEventDialog } from "@/components/events/create-event-dialog";
 import { EditEventDialog } from "@/components/events/edit-event-dialog";
 import { QrTicketDialog } from "@/components/events/qr-ticket-dialog";
+import { EventAttendeesDialog } from "@/components/events/event-attendees-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
@@ -25,6 +27,7 @@ import { toast } from "sonner";
 
 export default function EventsPage() {
   const { profile } = useAuth();
+  const router = useRouter();
   const {
     items: events,
     setItems: setEvents,
@@ -40,6 +43,9 @@ export default function EventsPage() {
   const [createOpen, setCreateOpen] = React.useState(false);
   const [ticketEvent, setTicketEvent] = React.useState<EventItem | null>(null);
   const [editEvent, setEditEvent] = React.useState<EventItem | null>(null);
+  const [attendeesEvent, setAttendeesEvent] = React.useState<EventItem | null>(
+    null
+  );
 
   React.useEffect(() => {
     const unsubscribe = subscribeToEvents((page) => {
@@ -129,6 +135,10 @@ export default function EventsPage() {
               onLeave={handleLeave}
               onShowTicket={setTicketEvent}
               onEdit={setEditEvent}
+              onScan={(item) =>
+                router.push(`/scan?eventId=${encodeURIComponent(item.id)}`)
+              }
+              onViewAttendees={setAttendeesEvent}
               onDeleted={(id) =>
                 setEvents((prev) => prev.filter((item) => item.id !== id))
               }
@@ -170,6 +180,13 @@ export default function EventsPage() {
         open={ticketEvent !== null}
         onOpenChange={(open) => {
           if (!open) setTicketEvent(null);
+        }}
+      />
+      <EventAttendeesDialog
+        event={attendeesEvent}
+        open={attendeesEvent !== null}
+        onOpenChange={(open) => {
+          if (!open) setAttendeesEvent(null);
         }}
       />
     </div>

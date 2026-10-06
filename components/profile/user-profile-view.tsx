@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
-import { Link2, Newspaper, School } from "lucide-react";
+import { Link2, MessageSquare, Newspaper, School } from "lucide-react";
 import { useAuth } from "@/context/auth-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -157,8 +157,8 @@ export function UserProfileView() {
       )
     );
     try {
-      await toggleLike(post.id, me.id, isLiked);
-      if (!isLiked) {
+      const nowLiked = await toggleLike(post.id, me.id);
+      if (nowLiked) {
         notifySafely({
           recipientId: post.authorId,
           actor: me,
@@ -169,6 +169,22 @@ export function UserProfileView() {
       }
     } catch (error) {
       console.error(error);
+      setLiked((prev) => {
+        const next = new Set(prev);
+        if (isLiked) next.add(post.id);
+        else next.delete(post.id);
+        return next;
+      });
+      setPosts((prev) =>
+        prev.map((item) =>
+          item.id === post.id
+            ? {
+                ...item,
+                likeCount: Math.max(0, (item.likeCount ?? 0) + (isLiked ? 1 : -1)),
+              }
+            : item
+        )
+      );
       toast.error("Failed to update like.");
     }
   };
@@ -272,13 +288,51 @@ export function UserProfileView() {
             ) : null}
 
             {me && !isMe ? (
-              <FollowButton
-                currentUser={me}
-                targetUserId={user.id}
-                targetName={user.name}
-                initialFollowing={following ?? false}
-                size="default"
-              />
+              <div className="flex gap-2">
+                <FollowButton
+                  currentUser={me}
+                  targetUserId={user.id}
+                  targetName={user.name}
+                  initialFollowing={following ?? false}
+                  size="default"
+                />
+                <Button
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={async () => {
+                    try {
+                      const { sendDmMessage } = await import(
+                        "@/lib/services/chat"
+                      );
+                      const { notifySafely } = await import(
+                        "@/lib/services/notifications"
+                      );
+                      await sendDmMessage(
+                        { id: user.id, username: user.username },
+                        me,
+                        `Hi @${user.username}!`
+                      );
+                      notifySafely({
+                        recipientId: user.id,
+                        actor: me,
+                        type: "dm_request",
+                        href: "/chat",
+                        text: "sent you a message request",
+                      });
+                      toast.success("Message request sent — find it in Chat.");
+                    } catch (error) {
+                      console.error(error);
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "Failed to send message request."
+                      );
+                    }
+                  }}
+                >
+                  <MessageSquare className="h-4 w-4" /> Message
+                </Button>
+              </div>
             ) : null}
           </div>
 

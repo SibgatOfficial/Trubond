@@ -13,7 +13,7 @@ export const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: "home" },
   { href: "/notes", label: "Notes", icon: "notes" },
   { href: "/chat", label: "Chat", icon: "chat" },
-  { href: "/groups", label: "Groups", icon: "group" },
+
   { href: "/events", label: "Events", icon: "event" },
   { href: "/projects", label: "Projects", icon: "folder" },
   { href: "/profile", label: "Profile", icon: "account_circle" },

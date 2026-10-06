@@ -14,7 +14,6 @@ import {
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
-  QrCode,
   Settings,
   UserCircle,
   Users,
@@ -181,17 +180,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-1.5">
             <CommandPalette />
 
-            <Button
-              asChild
-              variant="ghost"
-              size="sm"
-              className="hidden gap-2 lg:inline-flex"
-            >
-              <Link href="/scan">
-                <QrCode className="h-4 w-4" /> Scan ticket
-              </Link>
-            </Button>
-
             {/* Only rendered when the browser has actually offered an install
                 prompt — otherwise there is nothing to trigger. */}
             {canInstall && (
@@ -243,9 +231,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => router.push("/profile")}>
                   <UserCircle /> My Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push("/scan")}>
-                  <QrCode /> QR Scanner
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push("/settings")}>
                   <Settings /> Settings

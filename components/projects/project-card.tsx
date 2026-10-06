@@ -11,6 +11,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +36,7 @@ export function ProjectCard({
   isMember,
   isPending,
   onRequest,
+  onCancelRequest,
   onLeave,
   onManage,
   onEdit,
@@ -45,6 +47,7 @@ export function ProjectCard({
   isMember: boolean;
   isPending: boolean;
   onRequest: (project: Project) => void;
+  onCancelRequest?: (project: Project) => void;
   onLeave: (project: Project) => void;
   onManage: (project: Project) => void;
   onEdit: (project: Project) => void;
@@ -207,8 +210,19 @@ export function ProjectCard({
                 )}
               </>
             ) : isPending ? (
-              <Button variant="secondary" size="sm" disabled className="gap-1.5">
-                <Check className="h-4 w-4" /> Requested
+              <Button
+                variant="secondary"
+                size="sm"
+                className="gap-1.5"
+                disabled={busy}
+                onClick={() => run(() => onCancelRequest?.(project))}
+              >
+                {busy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <X className="h-4 w-4" />
+                )}
+                Requested — cancel?
               </Button>
             ) : (
               <Button

@@ -104,6 +104,53 @@ export function formatBytes(bytes: number): string {
 }
 
 /**
+ * Event timing summary: day + start–end + relative status.
+ * Falls back to legacy `date` when startsAt/endsAt are absent.
+ */
+export function eventTiming(event: {
+  date?: unknown;
+  startsAt?: unknown;
+  endsAt?: unknown;
+}): { line: string; status: string } {
+  const startMs = toMillis((event.startsAt as unknown) ?? event.date);
+  const endMs = toMillis((event.endsAt as unknown) ?? event.date);
+  if (!startMs) return { line: formatTimestamp(event.date), status: "" };
+  const start = new Date(startMs);
+  const end = endMs ? new Date(endMs) : start;
+  const day = start.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  const time = (d: Date) =>
+    d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const sameDay = start.toDateString() === end.toDateString();
+  const line = sameDay
+    ? `${day} · ${time(start)} – ${time(end)}`
+    : `${day} ${time(start)} → ${end.toLocaleDateString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      })} ${time(end)}`;
+  const now = Date.now();
+  let status = "";
+  if (now < startMs) {
+    const diffH = (startMs - now) / 36e5;
+    status =
+      diffH < 1
+        ? `Starts in ${Math.max(1, Math.round(diffH * 60))}m`
+        : diffH < 24
+          ? `Starts in ${Math.round(diffH)}h`
+          : `Starts in ${Math.round(diffH / 24)}d`;
+  } else if (now <= endMs) {
+    status = "Ongoing now";
+  } else {
+    status = "Ended";
+  }
+  return { line, status };
+}
+
+/**
  * A short, colour-keyed label for a file's type, e.g. "PDF", "DOCX", "IMG".
  *
  * Prefers the extension because it is what users recognise; falls back to the

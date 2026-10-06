@@ -35,7 +35,10 @@ export interface NewEventInput {
   title: string;
   description: string;
   location: string;
+  /** Legacy single date — kept so old reads keep working. New writes set startsAt/endsAt. */
   date: string;
+  startsAt: string;
+  endsAt: string;
   maxAttendees: number;
   coverPhotoUrl?: string | null;
 }
@@ -75,8 +78,11 @@ export async function createEvent(
     description: input.description,
     location: input.location,
     date: input.date,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
     maxAttendees: input.maxAttendees,
     attendeeCount: 0,
+    scanCount: 0,
     coverPhotoUrl: input.coverPhotoUrl ?? null,
     createdBy: creator.id,
     // Stored alongside the uid so ownership still resolves for this user after
@@ -181,6 +187,58 @@ export async function getEvent(eventId: string): Promise<EventItem | null> {
   const snap = await getDoc(doc(db, "events", eventId));
   if (!snap.exists()) return null;
   return { id: snap.id, ...(snap.data() as Omit<EventItem, "id">) };
+}
+
+/**
+ * Per-event QR check-in.
+ *
+ * Scans live at `events/{eventId}/scans/{userId}` so re-scanning the same
+ * ticket is idempotent — the second scan returns the prior time instead of
+ * double-counting. `scanCount` mirrors the subcollection size for cheap reads.
+ */
+export async function recordEventScan(
+  eventId: string,
+  attendee: { userId: string; username?: string; name?: string }
+): Promise<{ alreadyScanned: boolean; scannedAt: string }> {
+  const scanRef = doc(db, "events", eventId, "scans", attendee.userId);
+  const eventRef = doc(db, "events", eventId);
+  const result = await runTransaction(db, async (transaction) => {
+    const existing = await transaction.get(scanRef);
+    if (existing.exists()) {
+      const data = existing.data();
+      return {
+        alreadyScanned: true,
+        scannedAt: (data.scannedAt as string) ?? (data.joinedAt as string) ?? nowIso(),
+      };
+    }
+    const at = nowIso();
+    transaction.set(scanRef, {
+      userId: attendee.userId,
+      username: attendee.username ?? null,
+      name: attendee.name ?? null,
+      scannedAt: at,
+      joinedAt: at,
+    });
+    const eventDoc = await transaction.get(eventRef);
+    const current = (eventDoc.data()?.scanCount as number | undefined) ?? 0;
+    transaction.update(eventRef, { scanCount: current + 1 });
+    return { alreadyScanned: false, scannedAt: at };
+  });
+  return result;
+}
+
+export async function getEventScans(eventId: string): Promise<import("@/types").EventScan[]> {
+  const snap = await getDocs(
+    query(
+      collection(db, "events", eventId, "scans"),
+      orderBy("scannedAt", "desc"),
+      limit(200)
+    )
+  );
+  return snap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<import("@/types").EventScan, "id">),
+  }));
 }
 
 /** Partially updates an event. Only the creator should call this (see rules). */

@@ -3,11 +3,13 @@
 import * as React from "react";
 import {
   CalendarDays,
+  ListChecks,
   Loader2,
   MapPin,
   MoreHorizontal,
   Pencil,
   QrCode,
+  ScanLine,
   Ticket,
   Trash2,
   Users,
@@ -23,8 +25,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SafeImage } from "@/components/shared/safe-image";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { UserLink } from "@/components/shared/user-link";
 import { deleteEvent } from "@/lib/services/events";
-import { formatTimestamp, isOwnedBy, seedGradient } from "@/lib/utils";
+import { eventTiming, isOwnedBy, seedGradient } from "@/lib/utils";
 import type { EventItem, UserProfile } from "@/types";
 import { toast } from "sonner";
 
@@ -37,6 +40,8 @@ export function EventCard({
   onShowTicket,
   onEdit,
   onDeleted,
+  onScan,
+  onViewAttendees,
 }: {
   event: EventItem;
   joined: boolean;
@@ -46,6 +51,10 @@ export function EventCard({
   onShowTicket: (event: EventItem) => void;
   onEdit: (event: EventItem) => void;
   onDeleted: (eventId: string) => void;
+  /** Owner-only: open the event-specific scanner. */
+  onScan?: (event: EventItem) => void;
+  /** Owner-only: show who registered / scanned. */
+  onViewAttendees?: (event: EventItem) => void;
 }) {
   // Uid OR username — events created before the auth migration carry only the
   // creator's old uid, so the uid check alone would hide their own controls.
@@ -87,14 +96,17 @@ export function EventCard({
     }
   };
 
+  const timing = eventTiming(event);
+  const scanned = event.scanCount ?? 0;
+
   return (
     <Card className="overflow-hidden">
       {event.coverPhotoUrl ? (
         <SafeImage
           src={event.coverPhotoUrl}
           alt={`${event.title} cover`}
-          className="h-36 w-full object-cover"
-          wrapperClassName="h-36 w-full"
+          className="h-36 w-full object-contain bg-muted/40"
+          wrapperClassName="h-36 w-full bg-muted/40"
         />
       ) : (
         <div
@@ -112,6 +124,12 @@ export function EventCard({
 
           <div className="flex shrink-0 items-center gap-1">
             {joined && <Badge variant="success">Registered</Badge>}
+            {isOwner && <Badge variant="secondary">Organizer</Badge>}
+            {timing.status && (
+              <Badge variant={timing.status === "Ended" ? "outline" : "default"}>
+                {timing.status}
+              </Badge>
+            )}
             {isFull && <Badge variant="destructive">Full</Badge>}
 
             {isOwner && (
@@ -152,20 +170,32 @@ export function EventCard({
 
         <div className="space-y-1.5 text-sm text-muted-foreground">
           <p className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4" />
-            {formatTimestamp(event.date)}
+            <CalendarDays className="h-4 w-4 shrink-0" />
+            {timing.line}
           </p>
           {event.location && (
             <p className="flex items-center gap-2">
-              <MapPin className="h-4 w-4" />
+              <MapPin className="h-4 w-4 shrink-0" />
               {event.location}
             </p>
           )}
           <p className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
+            <Users className="h-4 w-4 shrink-0" />
             {count}
             {capacity > 0 ? ` / ${capacity}` : ""} attending
+            {isOwner || scanned > 0 ? ` · ${scanned} checked in` : ""}
           </p>
+          {event.createdByUsername && (
+            <p className="flex items-center gap-2 text-xs">
+              Organized by{" "}
+              <UserLink
+                userId={event.createdBy ?? ""}
+                className="font-medium text-foreground hover:text-primary hover:underline"
+              >
+                @{event.createdByUsername}
+              </UserLink>
+            </p>
+          )}
         </div>
 
         {capacity > 0 && (
@@ -178,7 +208,29 @@ export function EventCard({
         )}
 
         <div className="flex flex-wrap gap-2 border-t pt-3">
-          {joined ? (
+          {isOwner ? (
+            <>
+              {onScan && (
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => onScan(event)}
+                >
+                  <ScanLine className="h-4 w-4" /> Scan tickets
+                </Button>
+              )}
+              {onViewAttendees && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => onViewAttendees(event)}
+                >
+                  <ListChecks className="h-4 w-4" /> Attendees
+                </Button>
+              )}
+            </>
+          ) : joined ? (
             <>
               <Button
                 variant="outline"

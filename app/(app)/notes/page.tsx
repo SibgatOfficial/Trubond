@@ -297,6 +297,9 @@ export default function NotesPage() {
           if (!open) setCommentsNoteId(null);
         }}
         currentUser={profile}
+        noteUploaderId={
+          notes.find((note) => note.id === commentsNoteId)?.uploaderId ?? null
+        }
       />
 
       <EditNoteDialog

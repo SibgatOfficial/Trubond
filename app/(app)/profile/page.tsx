@@ -194,7 +194,7 @@ export default function ProfilePage() {
                     <img
                       src={post.imageUrl}
                       alt="Post"
-                      className="mt-3 max-h-72 w-full rounded-lg border object-cover"
+                      className="mt-3 max-h-72 w-full rounded-lg border object-contain"
                     />
                   )}
                   <p className="mt-2 text-xs text-muted-foreground">

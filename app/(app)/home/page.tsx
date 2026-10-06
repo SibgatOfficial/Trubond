@@ -42,6 +42,7 @@ export default function HomePage() {
   );
   const [liked, setLiked] = React.useState<Set<string>>(new Set());
   const [followingIds, setFollowingIds] = React.useState<Set<string>>(new Set());
+  const [followingLoaded, setFollowingLoaded] = React.useState(false);
   const [tab, setTab] = React.useState<FeedTab>("for-you");
   const [loading, setLoading] = React.useState(true);
   const [composerOpen, setComposerOpen] = React.useState(false);
@@ -67,9 +68,14 @@ export default function HomePage() {
     let active = true;
     getFollowingIds(profile.id)
       .then((set) => {
-        if (active) setFollowingIds(set);
+        if (active) {
+          setFollowingIds(set);
+          setFollowingLoaded(true);
+        }
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) setFollowingLoaded(true);
+      });
     return () => {
       active = false;
     };
@@ -101,12 +107,13 @@ export default function HomePage() {
    */
   const orderedIds = React.useMemo(() => {
     if (!profile) return [] as string[];
+    if (tab === "following" && !followingLoaded) return [] as string[];
     return selectFeed(posts, tab, {
       viewer: profile,
       followingIds,
     }).map((p) => p.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posts.length, tab, followingIds, profile]);
+  }, [posts.length, tab, followingIds, followingLoaded, profile]);
 
   /** Applies the frozen order to the *fresh* post objects, so counts stay live. */
   const visiblePosts = React.useMemo(() => {
@@ -157,9 +164,9 @@ export default function HomePage() {
       )
     );
     try {
-      await toggleLike(post.id, profile.id, isLiked);
+      const nowLiked = await toggleLike(post.id, profile.id);
       // Only on like — un-liking should not ping the author.
-      if (!isLiked) {
+      if (nowLiked) {
         notifySafely({
           recipientId: post.authorId,
           actor: profile,
@@ -170,6 +177,19 @@ export default function HomePage() {
       }
     } catch (error) {
       console.error(error);
+      setLiked((prev) => {
+        const next = new Set(prev);
+        if (isLiked) next.add(post.id);
+        else next.delete(post.id);
+        return next;
+      });
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === post.id
+            ? { ...p, likeCount: Math.max(0, (p.likeCount ?? 0) + (isLiked ? 1 : -1)) }
+            : p
+        )
+      );
       toast.error("Failed to update like.");
     }
   };
@@ -203,6 +223,12 @@ export default function HomePage() {
       {loading ? (
         <div className="space-y-4">
           {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-48 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : tab === "following" && !followingLoaded ? (
+        <div className="space-y-4">
+          {[0, 1].map((i) => (
             <Skeleton key={i} className="h-48 w-full rounded-xl" />
           ))}
         </div>

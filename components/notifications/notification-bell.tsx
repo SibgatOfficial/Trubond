@@ -3,8 +3,8 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowBigUp,
   Bell,
+  CalendarDays,
   FolderKanban,
   Heart,
   MessageCircle,
@@ -34,9 +34,15 @@ import type { AppNotification, NotificationType } from "@/types";
 const ICONS: Record<NotificationType, LucideIcon> = {
   like: Heart,
   comment: MessageCircle,
+  reply: MessageCircle,
   follow: UserPlus,
-  note_upvote: ArrowBigUp,
+  note_upvote: Heart,
+  note_comment: MessageCircle,
   project_approved: FolderKanban,
+  event_registration: CalendarDays,
+  event_scan: CalendarDays,
+  dm_request: MessageCircle,
+  dm_accepted: MessageCircle,
 };
 
 export function NotificationBell() {

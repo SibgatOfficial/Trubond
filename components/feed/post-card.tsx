@@ -215,8 +215,8 @@ export function PostCard({
             <SafeImage
               src={post.imageUrl}
               alt={`Attachment shared by ${post.authorName || post.authorUsername}`}
-              className="max-h-[420px] w-full object-cover"
-              wrapperClassName="h-40 w-full"
+              className="max-h-[520px] w-full object-contain"
+              wrapperClassName="min-h-40 w-full"
               fallbackLabel="This image is no longer available"
             />
           </div>

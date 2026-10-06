@@ -4,7 +4,6 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
-  BarChart3,
   Check,
   Cloud,
   Database,
@@ -27,18 +26,6 @@ import {
 import { SuccessAnimation } from "@/components/ui/lottie-animation";
 import { PageHeader } from "@/components/shared/page-header";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
-import { Skeleton } from "@/components/ui/skeleton";
-import { getPlatformStats, type StatKey } from "@/lib/services/stats";
-
-const STAT_LABELS: { key: StatKey; label: string }[] = [
-  { key: "users", label: "Users" },
-  { key: "posts", label: "Posts" },
-  { key: "notes", label: "Notes" },
-  { key: "projects", label: "Projects" },
-  { key: "events", label: "Events" },
-  { key: "follows", label: "Follows" },
-  { key: "notifications", label: "Alerts" },
-];
 import { DEFAULT_AVATAR, cn, initials, timeAgo } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -58,16 +45,6 @@ export default function SettingsPage() {
   // browser only), so highlighting is deferred to avoid a hydration mismatch.
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
-
-  const [stats, setStats] = React.useState<Record<
-    StatKey,
-    number | null
-  > | null>(null);
-  React.useEffect(() => {
-    getPlatformStats()
-      .then(setStats)
-      .catch((error) => console.error("Stats failed:", error));
-  }, []);
 
   if (!profile) return null;
 
@@ -125,43 +102,6 @@ export default function SettingsPage() {
               );
             })}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* --- Platform ------------------------------------------------------ */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <BarChart3 className="h-4 w-4 text-primary" /> Platform
-          </CardTitle>
-          <CardDescription>
-            Live document counts. These use Firestore aggregation queries, which
-            cost roughly one read per 1,000 documents rather than one per
-            document.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {stats ? (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {STAT_LABELS.map(({ key, label }) => (
-                <div
-                  key={key}
-                  className="rounded-lg bg-muted/60 p-3 text-center"
-                >
-                  <p className="text-lg font-bold text-primary">
-                    {stats[key] ?? "—"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{label}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {STAT_LABELS.slice(0, 4).map(({ key }) => (
-                <Skeleton key={key} className="h-16 w-full" />
-              ))}
-            </div>
-          )}
         </CardContent>
       </Card>
 

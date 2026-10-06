@@ -19,6 +19,7 @@ import {
 import { notifySafely } from "@/lib/services/notifications";
 import { DEFAULT_AVATAR, initials, isOwnedBy, timeAgo } from "@/lib/utils";
 import { UserLink } from "@/components/shared/user-link";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import type { Comment, UserProfile } from "@/types";
 import { toast } from "sonner";
 
@@ -40,6 +41,10 @@ export function CommentsDialog({
   const [text, setText] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [replyTarget, setReplyTarget] = React.useState<Comment | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(
+    null
+  );
+  const [deleting, setDeleting] = React.useState(false);
 
   /** One level of threading: top-level comments plus their direct replies. */
   const topLevel = React.useMemo(
@@ -69,7 +74,20 @@ export function CommentsDialog({
     setSending(true);
     try {
       const body = text.trim();
-      await addComment(postId, currentUser, body, replyTarget?.id ?? null);
+      // Two-level threading: replying to a reply attaches to its top-level
+      // thread but keeps @username context for display + notification.
+      const threadId = replyTarget
+        ? (replyTarget.parentId ?? replyTarget.id)
+        : null;
+      const replyToUsername = replyTarget?.authorUsername ?? null;
+      await addComment(
+        postId,
+        currentUser,
+        body,
+        threadId,
+        replyToUsername
+      );
+      const excerpt = body.length > 60 ? `${body.slice(0, 60)}…` : body;
       if (postAuthorId) {
         notifySafely({
           recipientId: postAuthorId,
@@ -77,7 +95,22 @@ export function CommentsDialog({
           type: "comment",
           targetId: postId,
           href: "/home",
-          text: body.length > 60 ? `${body.slice(0, 60)}…` : body,
+          text: excerpt,
+        });
+      }
+      // Notify the person being replied to (if not self / not post author dup).
+      if (
+        replyTarget &&
+        replyTarget.authorId !== currentUser.id &&
+        replyTarget.authorId !== postAuthorId
+      ) {
+        notifySafely({
+          recipientId: replyTarget.authorId,
+          actor: currentUser,
+          type: "reply",
+          targetId: postId,
+          href: "/home",
+          text: excerpt,
         });
       }
       setText("");
@@ -90,13 +123,18 @@ export function CommentsDialog({
     }
   };
 
-  const handleDelete = async (commentId: string) => {
-    if (!postId) return;
+  const handleDelete = async () => {
+    if (!postId || !confirmDeleteId) return;
+    setDeleting(true);
     try {
-      await deleteComment(postId, commentId);
+      await deleteComment(postId, confirmDeleteId);
+      setConfirmDeleteId(null);
+      toast.success("Comment deleted");
     } catch (error) {
       console.error(error);
       toast.error("Failed to delete comment.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -125,27 +163,30 @@ export function CommentsDialog({
             </span>
           </div>
           <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">
+            {comment.replyToUsername && (
+              <span className="font-medium text-primary">
+                @{comment.replyToUsername}{" "}
+              </span>
+            )}
             {comment.text}
           </p>
         </div>
-        {/* One level of nesting only — replies to replies attach to the same
-            thread, which keeps the dialog readable on a phone. */}
-        {!isReply && (
-          <button
-            type="button"
-            onClick={() => setReplyTarget(comment)}
-            className="mt-1 text-xs font-medium text-muted-foreground transition-colors hover:text-primary"
-          >
-            Reply
-          </button>
-        )}
+        {/* Replies to replies attach to the same thread — Reply stays visible
+            on both levels so sub-replies keep @username context. */}
+        <button
+          type="button"
+          onClick={() => setReplyTarget(comment)}
+          className="mt-1 text-xs font-medium text-muted-foreground transition-colors hover:text-primary"
+        >
+          Reply
+        </button>
       </div>
       {isOwnedBy(comment.authorId, comment.authorUsername, currentUser) && (
         <Button
           variant="ghost"
           size="icon"
           className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-          onClick={() => handleDelete(comment.id)}
+          onClick={() => setConfirmDeleteId(comment.id)}
           aria-label="Delete comment"
         >
           <Trash2 className="h-4 w-4" />
@@ -155,7 +196,9 @@ export function CommentsDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>      <DialogContent className="max-w-lg">
+    <>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Comments</DialogTitle>
         </DialogHeader>
@@ -214,5 +257,18 @@ export function CommentsDialog({
         </form>
       </DialogContent>
     </Dialog>
+
+    <ConfirmDeleteDialog
+      open={confirmDeleteId !== null}
+      onOpenChange={(open) => {
+        if (!open) setConfirmDeleteId(null);
+      }}
+      title="Delete this comment?"
+      description="The comment is removed for everyone. This can't be undone."
+      confirmLabel="Delete comment"
+      busy={deleting}
+      onConfirm={handleDelete}
+    />
+    </>
   );
 }

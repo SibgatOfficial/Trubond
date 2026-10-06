@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   BarChart3,
   Check,
+  FileText,
   Hash,
   Loader2,
   Menu,
@@ -81,6 +82,24 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
   const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
   const [deletingMessage, setDeletingMessage] = React.useState(false);
   const [replyTarget, setReplyTarget] = React.useState<MessageReply | null>(null);
+  /** Staged attachment: picked but NOT sent until the user hits Send. */
+  const [pendingFile, setPendingFile] = React.useState<File | null>(null);
+  const [highlightId, setHighlightId] = React.useState<string | null>(null);
+  const messageRefs = React.useRef(new Map<string, HTMLDivElement>());
+  const [dmStatus, setDmStatus] = React.useState<string | null>(null);
+
+  const scrollToMessage = (messageId: string) => {
+    const node = messageRefs.current.get(messageId);
+    if (!node) {
+      toast.error("That message isn't loaded — load earlier messages first.");
+      return;
+    }
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightId(messageId);
+    window.setTimeout(() => {
+      setHighlightId((current) => (current === messageId ? null : current));
+    }, 1600);
+  };
   /** Set before prepending history so the auto-scroll effect stands down. */
   const skipAutoScrollRef = React.useRef(false);
   /**
@@ -116,6 +135,7 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
     setMessagesLoading(true);
     setMessagesCursor(null);
     setHasMoreMessages(false);
+    setDmStatus(null);
     const unsubscribe = subscribeToMessages(
       activeRoom.type,
       activeRoom.id,
@@ -130,6 +150,15 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
         toast.error("Failed to load messages.");
       }
     );
+    // DM threads carry a pending/accepted/blocked status — recipients must
+    // accept before the conversation continues.
+    if (activeRoom.type === "dm") {
+      import("@/lib/services/chat").then(({ getDmThread }) => {
+        getDmThread(activeRoom.id)
+          .then((thread) => setDmStatus(thread?.status ?? null))
+          .catch(() => setDmStatus(null));
+      });
+    }
     return () => unsubscribe();
   }, [activeRoom]);
 
@@ -176,72 +205,73 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
 
   const handleSend = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!activeRoom || !text.trim()) return;
+    if (!activeRoom || sending) return;
     const value = text.trim();
+    if (!value && !pendingFile) return;
+    const quoted = replyTarget;
+    const fileToSend = pendingFile;
     setSendTrigger((n) => n + 1);
     setText("");
+    setPendingFile(null);
     setSending(true);
-    const quoted = replyTarget;
     setReplyTarget(null);
     try {
-      await sendTextMessage(
-        activeRoom.type,
-        activeRoom.id,
-        currentUser,
-        value,
-        quoted
-      );
+      if (fileToSend) {
+        setUploadPercent(0);
+        const url = await uploadChatFile(
+          activeRoom.type,
+          activeRoom.id,
+          fileToSend,
+          setUploadPercent
+        );
+        await sendFileMessage(
+          activeRoom.type,
+          activeRoom.id,
+          currentUser,
+          {
+            url,
+            name: fileToSend.name,
+            size: fileToSend.size,
+            type: fileToSend.type,
+          },
+          quoted,
+          value || undefined
+        );
+      } else {
+        await sendTextMessage(
+          activeRoom.type,
+          activeRoom.id,
+          currentUser,
+          value,
+          quoted
+        );
+      }
     } catch (error) {
       console.error(error);
-      toast.error("Failed to send message.");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to send message."
+      );
       setText(value);
+      setPendingFile(fileToSend);
       setReplyTarget(quoted);
     } finally {
       setSending(false);
+      setUploadPercent(null);
     }
   };
 
-  const handleFile = async (file: File) => {
-    if (!activeRoom) return;
-
+  /**
+   * Stage a file — never uploads here. User adds optional caption, then Send
+   * uploads + posts together.
+   */
+  const handleFile = (file: File) => {
     // Checked here for instant feedback; `uploadChatFile` enforces it again.
     const check = checkUpload(file, CHAT_UPLOAD_POLICY);
     if (!check.ok) {
       toast.error(check.reason);
       return;
     }
-
-    setSending(true);
-    setUploadPercent(0);
-    try {
-      const url = await uploadChatFile(
-        activeRoom.type,
-        activeRoom.id,
-        file,
-        setUploadPercent
-      );
-      await sendFileMessage(
-        activeRoom.type,
-        activeRoom.id,
-        currentUser,
-        {
-          url,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-        },
-        replyTarget
-      );
-      setReplyTarget(null);
-    } catch (error) {
-      console.error(error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to upload file."
-      );
-    } finally {
-      setSending(false);
-      setUploadPercent(null);
-    }
+    setPendingFile(file);
   };
 
   const handleEditSave = async (message: ChatMessage) => {
@@ -323,7 +353,11 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
     return (
       <div
         key={message.id}
-        className={`flex gap-2 ${isOwn ? "flex-row-reverse" : "flex-row"}`}
+        ref={(node) => {
+          if (node) messageRefs.current.set(message.id, node);
+          else messageRefs.current.delete(message.id);
+        }}
+        className={`flex gap-2 scroll-mt-20 ${isOwn ? "flex-row-reverse" : "flex-row"} ${highlightId === message.id ? "animate-pulse rounded-xl ring-2 ring-primary" : ""}`}
       >
         {!isOwn && (
           <UserLink userId={message.senderId} stopPropagation={false}>
@@ -355,18 +389,21 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
           )}
 
           {message.replyTo ? (
-            <div
-              className={`mb-1.5 rounded-md border-l-2 px-2 py-1 text-xs ${
+            <button
+              type="button"
+              onClick={() => scrollToMessage(message.replyTo!.messageId)}
+              title="Jump to quoted message"
+              className={`mb-1.5 block w-full rounded-md border-l-2 px-2 py-1 text-left text-xs transition-opacity hover:opacity-80 ${
                 isOwn
                   ? "border-primary-foreground/40 bg-primary-foreground/10"
                   : "border-primary/50 bg-background/40"
               }`}
             >
-              <p className="font-semibold opacity-80">
+              <span className="block font-semibold opacity-80">
                 @{message.replyTo.senderUsername}
-              </p>
-              <p className="line-clamp-2 opacity-70">{message.replyTo.text}</p>
-            </div>
+              </span>
+              <span className="line-clamp-2 block opacity-70">{message.replyTo.text}</span>
+            </button>
           ) : null}
 
           {type === "poll" && message.poll ? (
@@ -529,7 +566,7 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
   );
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-12rem)] max-w-4xl gap-4 md:h-[calc(100dvh-7rem)]">
+    <div className="mx-auto flex h-[calc(100dvh-9.5rem)] max-w-4xl gap-4 md:h-[calc(100dvh-7rem)] min-h-[480px]">
       <aside className="hidden w-64 shrink-0 flex-col overflow-hidden rounded-xl border bg-card md:flex">
         <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
           <Hash className="h-4 w-4 text-primary" />
@@ -557,12 +594,12 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
           event.preventDefault();
           setDragActive(false);
           const file = event.dataTransfer.files?.[0];
-          if (file) void handleFile(file);
+          if (file) handleFile(file);
         }}
       >
         {dragActive && (
           <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/85 text-sm font-medium text-primary">
-            Drop a file to send
+            Drop a file to attach
           </div>
         )}
 
@@ -682,6 +719,91 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
           </div>
         )}
 
+        {activeRoom && pendingFile && (
+          <div className="flex shrink-0 items-center gap-2 border-t bg-muted/50 px-3 py-2 text-xs">
+            <FileText className="h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium">{pendingFile.name}</p>
+              <p className="text-muted-foreground">
+                Ready to send — add a caption below, then hit Send.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => setPendingFile(null)}
+              aria-label="Remove attachment"
+              disabled={sending}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+
+        {activeRoom?.type === "dm" && dmStatus === "pending" && (
+          <div className="shrink-0 space-y-2 border-b bg-amber-500/10 px-4 py-3 text-sm">
+            <p className="font-medium">
+              {activeRoom.recipientId === currentUser.id
+                ? "This person wants to message you. Accept to continue the conversation."
+                : "Request sent. They need to accept before you can keep chatting."}
+            </p>
+            {activeRoom.recipientId === currentUser.id && (
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      const { respondToDmRequest } = await import(
+                        "@/lib/services/chat"
+                      );
+                      const { notifySafely } = await import(
+                        "@/lib/services/notifications"
+                      );
+                      await respondToDmRequest(activeRoom.id, true);
+                      setDmStatus("accepted");
+                      if (activeRoom.requesterId) {
+                        notifySafely({
+                          recipientId: activeRoom.requesterId,
+                          actor: currentUser,
+                          type: "dm_accepted",
+                          href: "/chat",
+                          text: "accepted your message request",
+                        });
+                      }
+                      toast.success("Message request accepted");
+                    } catch (error) {
+                      console.error(error);
+                      toast.error("Failed to accept request.");
+                    }
+                  }}
+                >
+                  Accept
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const { respondToDmRequest } = await import(
+                        "@/lib/services/chat"
+                      );
+                      await respondToDmRequest(activeRoom.id, false);
+                      setDmStatus("blocked");
+                      toast.success("Request declined");
+                    } catch (error) {
+                      console.error(error);
+                      toast.error("Failed to decline request.");
+                    }
+                  }}
+                >
+                  Decline
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeRoom && (
           <form
             onSubmit={handleSend}
@@ -726,10 +848,12 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
                 const file = Array.from(event.clipboardData.files)[0];
                 if (file) {
                   event.preventDefault();
-                  void handleFile(file);
+                  handleFile(file);
                 }
               }}
-              placeholder="Type a message..."
+              placeholder={
+                pendingFile ? "Add a caption (optional)..." : "Type a message..."
+              }
               aria-label="Message"
               className="flex-1"
             />
@@ -738,7 +862,7 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
                 type="submit"
                 size="icon"
                 aria-label="Send message"
-                disabled={sending || !text.trim()}
+                disabled={sending || (!text.trim() && !pendingFile)}
               >
                 {sending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

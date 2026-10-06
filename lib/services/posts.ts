@@ -10,6 +10,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   updateDoc,
   where,
   writeBatch,
@@ -128,20 +129,22 @@ export async function hasLiked(postId: string, userId: string): Promise<boolean>
 
 export async function toggleLike(
   postId: string,
-  userId: string,
-  currentlyLiked: boolean
-): Promise<void> {
-  const batch = writeBatch(db);
+  userId: string
+): Promise<boolean> {
   const likeRef = doc(db, "posts", postId, "likes", userId);
   const postRef = doc(db, "posts", postId);
-  if (currentlyLiked) {
-    batch.delete(likeRef);
-    batch.update(postRef, { likeCount: increment(-1) });
-  } else {
-    batch.set(likeRef, { likedAt: nowIso() });
-    batch.update(postRef, { likeCount: increment(1) });
-  }
-  await batch.commit();
+
+  return runTransaction(db, async (transaction) => {
+    const existing = await transaction.get(likeRef);
+    if (existing.exists()) {
+      transaction.delete(likeRef);
+      transaction.update(postRef, { likeCount: increment(-1) });
+      return false;
+    }
+    transaction.set(likeRef, { likedAt: nowIso() });
+    transaction.update(postRef, { likeCount: increment(1) });
+    return true;
+  });
 }
 
 export function subscribeToComments(
@@ -162,7 +165,8 @@ export async function addComment(
   postId: string,
   author: UserProfile,
   text: string,
-  parentId?: string | null
+  parentId?: string | null,
+  replyToUsername?: string | null
 ): Promise<void> {
   const batch = writeBatch(db);
   const commentRef = doc(collection(db, "posts", postId, "comments"));
@@ -172,6 +176,7 @@ export async function addComment(
     authorPhoto: author.profilePhotoUrl,
     text,
     parentId: parentId ?? null,
+    replyToUsername: replyToUsername ?? null,
     createdAt: nowIso(),
   });
   batch.update(doc(db, "posts", postId), { commentCount: increment(1) });

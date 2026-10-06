@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { createEvent } from "@/lib/services/events";
 import { compressImage, uploadCoverImage } from "@/lib/services/storage";
@@ -35,7 +36,11 @@ export function CreateEventDialog({
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [location, setLocation] = React.useState("");
-  const [date, setDate] = React.useState("");
+  const [startDate, setStartDate] = React.useState("");
+  const [startTime, setStartTime] = React.useState("");
+  const [endTime, setEndTime] = React.useState("");
+  const [multiDay, setMultiDay] = React.useState(false);
+  const [endDate, setEndDate] = React.useState("");
   const [maxAttendees, setMaxAttendees] = React.useState("50");
   const [cover, setCover] = React.useState<File | null>(null);
   const [preview, setPreview] = React.useState<string | null>(null);
@@ -64,8 +69,22 @@ export function CreateEventDialog({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!title.trim() || !date) {
-      toast.error("Title and date are required.");
+    if (!title.trim() || !startDate || !startTime || !endTime) {
+      toast.error("Title, start date, start time and end time are required.");
+      return;
+    }
+    if (multiDay && !endDate) {
+      toast.error("Pick an end date for multi-day events.");
+      return;
+    }
+    const startsAt = new Date(`${startDate}T${startTime}`);
+    const endsAt = new Date(`${multiDay ? endDate : startDate}T${endTime}`);
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+      toast.error("Those dates or times don't look right.");
+      return;
+    }
+    if (endsAt <= startsAt) {
+      toast.error("End must be after start.");
       return;
     }
     setSaving(true);
@@ -84,7 +103,9 @@ export function CreateEventDialog({
         title: title.trim(),
         description: description.trim(),
         location: location.trim(),
-        date: new Date(date).toISOString(),
+        date: startsAt.toISOString(),
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
         maxAttendees: Number(maxAttendees) || 1,
         coverPhotoUrl,
       });
@@ -93,7 +114,11 @@ export function CreateEventDialog({
       setTitle("");
       setDescription("");
       setLocation("");
-      setDate("");
+      setStartDate("");
+      setStartTime("");
+      setEndTime("");
+      setMultiDay(false);
+      setEndDate("");
       setMaxAttendees("50");
       setCover(null);
       onOpenChange(false);
@@ -197,16 +222,60 @@ export function CreateEventDialog({
               />
             </div>
             <div>
-              <Label htmlFor="e-date">Date &amp; time *</Label>
+              <Label htmlFor="e-start-date">Start date *</Label>
               <Input
-                id="e-date"
-                type="datetime-local"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+                id="e-start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
                 className="mt-1.5"
               />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="e-start-time">Start time *</Label>
+              <Input
+                id="e-start-time"
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="e-end-time">End time *</Label>
+              <Input
+                id="e-end-time"
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
+            <div>
+              <p className="text-sm font-medium">Ends on another day</p>
+              <p className="text-xs text-muted-foreground">
+                Off = one-day event. On = pick an end date too.
+              </p>
+            </div>
+            <Switch checked={multiDay} onCheckedChange={setMultiDay} aria-label="Ends on another day" />
+          </div>
+          {multiDay && (
+            <div>
+              <Label htmlFor="e-end-date">End date *</Label>
+              <Input
+                id="e-end-date"
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
+          )}
           <div>
             <Label htmlFor="e-max">Max attendees</Label>
             <Input

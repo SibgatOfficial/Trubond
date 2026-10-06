@@ -122,12 +122,28 @@ export function describeNotification(notification: AppNotification): string {
       return notification.text
         ? `${who} commented: "${notification.text}"`
         : `${who} commented on your post`;
+    case "reply":
+      return notification.text
+        ? `${who} replied: "${notification.text}"`
+        : `${who} replied to you`;
     case "follow":
       return `${who} started following you`;
     case "note_upvote":
       return `${who} upvoted your note`;
+    case "note_comment":
+      return notification.text
+        ? `${who} commented on your note: "${notification.text}"`
+        : `${who} commented on your note`;
     case "project_approved":
       return `${who} approved your request to join a project`;
+    case "event_registration":
+      return `${who} registered for your event`;
+    case "event_scan":
+      return `${who} checked in to your event`;
+    case "dm_request":
+      return `${who} sent you a message request`;
+    case "dm_accepted":
+      return `${who} accepted your message request`;
     default:
       return `${who} interacted with your content`;
   }

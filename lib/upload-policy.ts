@@ -95,16 +95,11 @@ export const DOCUMENT_UPLOAD_POLICY: UploadPolicy = {
   maxBytes: 25 * 1024 * 1024,
 };
 
-/**
- * Notes / assignments: documents plus images.
- *
- * Larger cap than chat because a scanned assignment or a slide deck legitimately
- * runs to tens of megabytes.
- */
+/** Notes / assignments: PDF-only for reliable in-app preview. */
 export const NOTE_UPLOAD_POLICY: UploadPolicy = {
-  label: "a document or image",
-  allowedMimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
-  allowedExtensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
+  label: "a PDF",
+  allowedMimeTypes: ["application/pdf"],
+  allowedExtensions: ["PDF"],
   maxBytes: 25 * 1024 * 1024,
 };
 
