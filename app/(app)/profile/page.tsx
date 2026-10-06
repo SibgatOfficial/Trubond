@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   CalendarDays,
   FolderKanban,
+  Link2,
   Mail,
   Newspaper,
   Pencil,
@@ -17,12 +18,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/empty-state";
 import { EditProfileDialog } from "@/components/profile/edit-profile-dialog";
+import { SocialLinks } from "@/components/profile/social-links";
 import { subscribeToUserPosts } from "@/lib/services/posts";
 import { subscribeToUserProjects } from "@/lib/services/projects";
 import { getJoinedEventIds, subscribeToEvents } from "@/lib/services/events";
 import { getUserActivityCounts } from "@/lib/services/stats";
 import { DEFAULT_AVATAR, initials, timeAgo } from "@/lib/utils";
 import type { EventItem, Post, Project } from "@/types";
+import { toast } from "sonner";
 
 export default function ProfilePage() {
   const { profile, refreshProfile } = useAuth();
@@ -123,14 +126,37 @@ export default function ProfilePage() {
                 <p className="text-sm text-muted-foreground">@{profile.username}</p>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => setEditOpen(true)}
-            >
-              <Pencil className="h-4 w-4" /> Edit profile
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={async () => {
+                  // Username, not uid: the link stays valid even if the auth
+                  // provider changes again — and /user?u=<username> resolves
+                  // for visitors, while /profile is only ever your own page.
+                  const url = `${window.location.origin}/user?u=${encodeURIComponent(
+                    profile.username
+                  )}`;
+                  try {
+                    await navigator.clipboard.writeText(url);
+                    toast.success("Profile link copied");
+                  } catch {
+                    toast.error(url);
+                  }
+                }}
+              >
+                <Link2 className="h-4 w-4" /> Copy link
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setEditOpen(true)}
+              >
+                <Pencil className="h-4 w-4" /> Edit profile
+              </Button>
+            </div>
           </div>
 
           <div className="mt-4 space-y-2 text-sm">
@@ -147,6 +173,7 @@ export default function ProfilePage() {
                 </span>
               )}
             </div>
+            <SocialLinks links={profile.socialLinks} />
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">

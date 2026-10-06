@@ -117,6 +117,7 @@ export async function updateUserProfile(
   uid: string,
   data: Partial<CreateProfileInput> & {
     profilePhotoUrl?: string;
+    socialLinks?: UserProfile["socialLinks"];
   }
 ): Promise<void> {
   await updateDoc(doc(db, "users", uid), data);

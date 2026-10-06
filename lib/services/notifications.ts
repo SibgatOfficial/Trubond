@@ -2,11 +2,9 @@ import {
   addDoc,
   collection,
   doc,
-  limit,
+  getDocs,
   onSnapshot,
-  orderBy,
   query,
-  updateDoc,
   where,
   writeBatch,
   type Unsubscribe,
@@ -29,9 +27,9 @@ export interface NotificationActor {
  * Firestore rules can allow creating a notification only when
  * `request.auth.uid == actorId`, and reading only when `recipientId == auth.uid`.
  *
- * Requiring a composite index:
- *   notifications: recipientId ASC, createdAt DESC
- * (documented in firestore.indexes.json)
+ * Reads use a plain equality filter (covered by Firestore's automatic
+ * single-field index — no composite index to deploy) and sort client-side;
+ * `pruneNotifications` keeps each recipient's set tiny so that sort is cheap.
  */
 
 const nowIso = () => new Date().toISOString();
@@ -82,21 +80,26 @@ export function subscribeToNotifications(
   recipientId: string,
   callback: (notifications: AppNotification[]) => void
 ): Unsubscribe {
+  // Equality-only query: an orderBy here would demand a composite
+  // (recipientId + createdAt) whose absence fails with "failed-precondition"
+  // and silently empties the bell. Sorting client-side removes that whole
+  // class of failure; pruning keeps the doc count small.
   const q = query(
     collection(db, "notifications"),
-    where("recipientId", "==", recipientId),
-    orderBy("createdAt", "desc"),
-    limit(30)
+    where("recipientId", "==", recipientId)
   );
 
   return onSnapshot(
     q,
     (snap) => {
-      callback(
-        snap.docs.map(
-          (d) => ({ id: d.id, ...(d.data() as Omit<AppNotification, "id">) })
-        )
+      const items: AppNotification[] = snap.docs.map(
+        (d) => ({ id: d.id, ...(d.data() as Omit<AppNotification, "id">) })
       );
+      // Newest first — createdAt is written as an ISO string everywhere.
+      items.sort((a, b) =>
+        String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))
+      );
+      callback(items.slice(0, 30));
     },
     (error) => {
       console.error("Notification subscription failed:", error);
@@ -110,6 +113,60 @@ export async function markNotificationsRead(ids: string[]): Promise<void> {
   const batch = writeBatch(db);
   ids.forEach((id) => batch.update(doc(db, "notifications", id), { read: true }));
   await batch.commit();
+}
+
+/**
+ * Keeps only the newest `keep` notifications for a recipient.
+ *
+ * Firestore rules only allow the RECIPIENT to delete their own docs, so this
+ * runs on the recipient's own session (the bell calls it once per mount).
+ * Fire-and-forget: a pruning failure must never affect the visible list.
+ */
+export async function pruneNotifications(
+  recipientId: string,
+  keep = 20
+): Promise<void> {
+  const snap = await getDocs(
+    query(
+      collection(db, "notifications"),
+      where("recipientId", "==", recipientId)
+    )
+  );
+  const sorted = snap.docs
+    .map((d) => ({
+      ref: d.ref,
+      createdAt: (d.data() as Partial<AppNotification>).createdAt,
+    }))
+    .sort((a, b) =>
+      String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))
+    );
+  const excess = sorted.slice(keep);
+  if (excess.length === 0) return;
+  // Batches cap at 500 writes — stay well under with 400 per pass.
+  const batch = writeBatch(db);
+  excess.slice(0, 400).forEach(({ ref }) => batch.delete(ref));
+  await batch.commit();
+}
+
+/**
+ * Deletes EVERY notification belonging to `recipientId` — the confirm
+ * dialog's "Clear all". Only the recipient may delete their own docs (see
+ * firestore.rules). Batches loop, so backlogs larger than one 500-write
+ * batch still clear.
+ */
+export async function clearNotifications(recipientId: string): Promise<void> {
+  const snap = await getDocs(
+    query(
+      collection(db, "notifications"),
+      where("recipientId", "==", recipientId)
+    )
+  );
+  const refs = snap.docs.map((d) => d.ref);
+  for (let i = 0; i < refs.length; i += 400) {
+    const batch = writeBatch(db);
+    refs.slice(i, i + 400).forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
 }
 
 /** Human-readable line, built in one place so the UI stays dumb. */

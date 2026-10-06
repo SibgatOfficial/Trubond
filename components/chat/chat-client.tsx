@@ -84,7 +84,6 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
   const [replyTarget, setReplyTarget] = React.useState<MessageReply | null>(null);
   /** Staged attachment: picked but NOT sent until the user hits Send. */
   const [pendingFile, setPendingFile] = React.useState<File | null>(null);
-  const [highlightId, setHighlightId] = React.useState<string | null>(null);
   const messageRefs = React.useRef(new Map<string, HTMLDivElement>());
   const [dmStatus, setDmStatus] = React.useState<string | null>(null);
 
@@ -95,10 +94,6 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
       return;
     }
     node.scrollIntoView({ behavior: "smooth", block: "center" });
-    setHighlightId(messageId);
-    window.setTimeout(() => {
-      setHighlightId((current) => (current === messageId ? null : current));
-    }, 1600);
   };
   /** Set before prepending history so the auto-scroll effect stands down. */
   const skipAutoScrollRef = React.useRef(false);
@@ -357,7 +352,7 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
           if (node) messageRefs.current.set(message.id, node);
           else messageRefs.current.delete(message.id);
         }}
-        className={`flex gap-2 scroll-mt-20 ${isOwn ? "flex-row-reverse" : "flex-row"} ${highlightId === message.id ? "animate-pulse rounded-xl ring-2 ring-primary" : ""}`}
+        className={`flex gap-2 scroll-mt-20 ${isOwn ? "flex-row-reverse" : "flex-row"}`}
       >
         {!isOwn && (
           <UserLink userId={message.senderId} stopPropagation={false}>

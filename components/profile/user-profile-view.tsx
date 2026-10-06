@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { PresenceDot } from "@/components/shared/presence-dot";
 import { FollowButton } from "@/components/profile/follow-button";
+import { SocialLinks } from "@/components/profile/social-links";
 import { PostCard } from "@/components/feed/post-card";
 import { CommentsDialog } from "@/components/feed/comments-dialog";
 import { getUserByUsername, getUserProfile } from "@/lib/services/users";
@@ -372,6 +373,7 @@ export function UserProfileView() {
                 </Badge>
               ) : null}
             </div>
+            <SocialLinks links={user.socialLinks} />
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">

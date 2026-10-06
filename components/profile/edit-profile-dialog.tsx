@@ -43,6 +43,12 @@ export function EditProfileDialog({
   const [about, setAbout] = React.useState(profile.about ?? "");
   const [branch, setBranch] = React.useState(profile.branch ?? "");
   const [photoFile, setPhotoFile] = React.useState<File | null>(null);
+  const [links, setLinks] = React.useState({
+    linkedin: "",
+    github: "",
+    portfolio: "",
+    website: "",
+  });
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
@@ -51,6 +57,12 @@ export function EditProfileDialog({
       setAbout(profile.about ?? "");
       setBranch(profile.branch ?? "");
       setPhotoFile(null);
+      setLinks({
+        linkedin: profile.socialLinks?.linkedin ?? "",
+        github: profile.socialLinks?.github ?? "",
+        portfolio: profile.socialLinks?.portfolio ?? "",
+        website: profile.socialLinks?.website ?? "",
+      });
     }
   }, [open, profile]);
 
@@ -62,11 +74,17 @@ export function EditProfileDialog({
         const compressed = await compressImage(photoFile);
         profilePhotoUrl = await uploadProfilePhoto(profile.id, compressed);
       }
+      const socialLinks: NonNullable<UserProfile["socialLinks"]> = {};
+      if (links.linkedin.trim()) socialLinks.linkedin = links.linkedin.trim();
+      if (links.github.trim()) socialLinks.github = links.github.trim();
+      if (links.portfolio.trim()) socialLinks.portfolio = links.portfolio.trim();
+      if (links.website.trim()) socialLinks.website = links.website.trim();
       await updateUserProfile(profile.id, {
         name: name.trim(),
         about,
         branch,
         profilePhotoUrl,
+        socialLinks,
       });
       await refreshProfile();
       toast.success("Profile updated!");
@@ -120,6 +138,56 @@ export function EditProfileDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-3 border-t pt-4">
+            <div>
+              <Label htmlFor="ep-linkedin">LinkedIn</Label>
+              <Input
+                id="ep-linkedin"
+                placeholder="linkedin.com/in/username"
+                value={links.linkedin}
+                onChange={(e) =>
+                  setLinks((p) => ({ ...p, linkedin: e.target.value }))
+                }
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="ep-github">GitHub</Label>
+              <Input
+                id="ep-github"
+                placeholder="github.com/username"
+                value={links.github}
+                onChange={(e) =>
+                  setLinks((p) => ({ ...p, github: e.target.value }))
+                }
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="ep-portfolio">Portfolio</Label>
+              <Input
+                id="ep-portfolio"
+                placeholder="your-portfolio.com"
+                value={links.portfolio}
+                onChange={(e) =>
+                  setLinks((p) => ({ ...p, portfolio: e.target.value }))
+                }
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="ep-website">Website</Label>
+              <Input
+                id="ep-website"
+                placeholder="your-site.com"
+                value={links.website}
+                onChange={(e) =>
+                  setLinks((p) => ({ ...p, website: e.target.value }))
+                }
+                className="mt-1.5"
+              />
+            </div>
           </div>
           <div>
             <Label htmlFor="ep-photo">New photo</Label>

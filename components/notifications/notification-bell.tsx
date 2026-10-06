@@ -8,6 +8,7 @@ import {
   FolderKanban,
   Heart,
   MessageCircle,
+  Trash2,
   UserPlus,
   type LucideIcon,
 } from "lucide-react";
@@ -23,13 +24,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  clearNotifications,
   describeNotification,
   markNotificationsRead,
+  pruneNotifications,
   subscribeToNotifications,
 } from "@/lib/services/notifications";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { DEFAULT_AVATAR, cn, initials, timeAgo } from "@/lib/utils";
 import { UserLink } from "@/components/shared/user-link";
 import type { AppNotification, NotificationType } from "@/types";
+import { toast } from "sonner";
 
 const ICONS: Record<NotificationType, LucideIcon> = {
   like: Heart,
@@ -50,9 +55,14 @@ export function NotificationBell() {
   const router = useRouter();
   const [items, setItems] = React.useState<AppNotification[]>([]);
   const [open, setOpen] = React.useState(false);
+  const [confirmClear, setConfirmClear] = React.useState(false);
+  const [clearing, setClearing] = React.useState(false);
 
   React.useEffect(() => {
     if (!profile) return;
+    // Fire-and-forget: cap storage at the newest 20 (only the recipient may
+    // delete their own docs — see firestore.rules — so it runs here, on mount).
+    pruneNotifications(profile.id, 20).catch(() => undefined);
     return subscribeToNotifications(profile.id, setItems);
   }, [profile]);
 
@@ -67,6 +77,23 @@ export function NotificationBell() {
       // Marking on open (rather than per item) matches how people expect a bell
       // to behave, and avoids a write for every notification merely glanced at.
       markNotificationsRead(unreadIds).catch(() => undefined);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!profile) return;
+    setClearing(true);
+    try {
+      await clearNotifications(profile.id);
+      // Optimistic — the live subscription confirms either way.
+      setItems([]);
+      toast.success("Notifications cleared");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to clear notifications.");
+    } finally {
+      setClearing(false);
+      setConfirmClear(false);
     }
   };
 
@@ -160,7 +187,26 @@ export function NotificationBell() {
             })
           )}
         </div>
+
+        <DropdownMenuSeparator className="my-0" />
+        <DropdownMenuItem
+          disabled={items.length === 0 || clearing}
+          onSelect={() => setConfirmClear(true)}
+          className="justify-center gap-2 px-3 py-2 text-xs text-muted-foreground focus:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" /> Clear all
+        </DropdownMenuItem>
       </DropdownMenuContent>
+
+      <ConfirmDeleteDialog
+        open={confirmClear}
+        onOpenChange={setConfirmClear}
+        title="Clear all notifications?"
+        description="This removes every notification from your list. This can't be undone."
+        confirmLabel="Clear all"
+        busy={clearing}
+        onConfirm={() => void handleClearAll()}
+      />
     </DropdownMenu>
   );
 }

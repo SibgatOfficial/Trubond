@@ -291,7 +291,15 @@ service cloud.firestore {
     // "blocked"). The thread doc itself only ever changes on status/updatedAt —
     // participantIds can never be rewritten after creation.
     match /dm_threads/{threadId} {
-      allow read: if isSignedIn()
+      // get: sendDmMessage() probes for the thread BEFORE creating it — on a
+      // brand-new thread `resource` is null, and touching resource.data then
+      // errors ("Missing or insufficient permissions"). Reading a non-existent
+      // doc reveals nothing, so allow the probe; existing threads stay
+      // participant-only.
+      allow get: if isSignedIn()
+                  && (resource == null
+                      || request.auth.uid in resource.data.participantIds);
+      allow list: if isSignedIn()
                   && request.auth.uid in resource.data.participantIds;
       allow create: if isSignedIn()
                     && request.resource.data.requesterId == request.auth.uid

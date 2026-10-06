@@ -35,6 +35,6 @@ yarn-error.log*
 
 # vercel
 .vercel
-
+.firestore.rules
 # legacy static site (kept for reference, not part of the Next.js build)
 # index.html, home.html, create.html, scan.html, home.js, home.css

@@ -18,6 +18,7 @@ import {
   getProjectMembers,
 } from "@/lib/services/projects";
 import { getUsersByIds } from "@/lib/services/users";
+import { notifySafely } from "@/lib/services/notifications";
 import { DEFAULT_AVATAR, initials, isOwnedBy } from "@/lib/utils";
 import type { Project, ProjectRequest, UserProfile } from "@/types";
 import { toast } from "sonner";
@@ -67,6 +68,13 @@ export function ManageProjectDialog({
     try {
       await approveRequest(project.id, request.id, request.userId);
       toast.success(`Approved @${request.username}`);
+      notifySafely({
+        recipientId: request.userId,
+        actor: currentUser,
+        type: "project_approved",
+        targetId: project.id,
+        href: "/projects",
+      });
       load();
     } catch (error) {
       console.error(error);

@@ -23,6 +23,7 @@ import {
 import { LoadMore } from "@/components/shared/load-more";
 import { usePagedList } from "@/hooks/use-paged-list";
 import type { EventItem } from "@/types";
+import { notifySafely } from "@/lib/services/notifications";
 import { toast } from "sonner";
 
 export default function EventsPage() {
@@ -77,6 +78,16 @@ export default function EventsPage() {
       await joinEvent(event.id, profile.id);
       setJoined((prev) => new Set(prev).add(event.id));
       toast.success("Registered for the event!");
+      // Ping the organiser — never yourself.
+      if (event.createdBy && event.createdBy !== profile.id) {
+        notifySafely({
+          recipientId: event.createdBy,
+          actor: profile,
+          type: "event_registration",
+          targetId: event.id,
+          href: "/events",
+        });
+      }
     } catch (error) {
       console.error(error);
       toast.error(error instanceof Error ? error.message : "Failed to register.");
