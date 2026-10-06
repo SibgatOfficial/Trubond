@@ -27,7 +27,7 @@ import { notifySafely } from "@/lib/services/notifications";
 import { getJoinedEventIds } from "@/lib/services/events";
 import { getUserActivityCounts } from "@/lib/services/stats";
 import { usePresenceMap } from "@/hooks/use-presence";
-import { DEFAULT_AVATAR, initials, timeAgo } from "@/lib/utils";
+import { DEFAULT_AVATAR, initials } from "@/lib/utils";
 import type { Post, UserProfile } from "@/types";
 import { toast } from "sonner";
 
@@ -48,6 +48,10 @@ export function UserProfileView() {
   const [following, setFollowing] = React.useState<boolean | null>(null);
   const [posts, setPosts] = React.useState<Post[]>([]);
   const [liked, setLiked] = React.useState<Set<string>>(new Set());
+  /** Post ids whose like-state has already been fetched from the server. */
+  const likedResolvedRef = React.useRef<Set<string>>(new Set());
+  /** Post ids the user toggled locally — never overwritten by a fetch. */
+  const likedTouchedRef = React.useRef<Set<string>>(new Set());
   const [commentsPostId, setCommentsPostId] = React.useState<string | null>(null);
   const [activity, setActivity] = React.useState<{
     notes: number | null;
@@ -119,26 +123,41 @@ export function UserProfileView() {
     return subscribeToUserPosts(userId, setPosts);
   }, [userId]);
 
+  /**
+   * Resolve liked posts ONCE per id — merged, never replaced (see the home
+   * feed for the full rationale; the old replace-every-posts-change behaviour
+   * raced the optimistic like and desynced the heart from the count).
+   */
   React.useEffect(() => {
     if (!me || posts.length === 0) return;
-    let active = true;
-    getLikedPostIds(
-      posts.map((post) => post.id),
-      me.id
-    )
-      .then((set) => {
-        if (active) setLiked(set);
+    const missing = posts
+      .map((post) => post.id)
+      .filter((id) => !likedResolvedRef.current.has(id));
+    if (missing.length === 0) return;
+    missing.forEach((id) => likedResolvedRef.current.add(id));
+
+    getLikedPostIds(missing, me.id)
+      .then((serverSet) => {
+        setLiked((prev) => {
+          const next = new Set(prev);
+          for (const id of missing) {
+            if (likedTouchedRef.current.has(id)) continue;
+            if (serverSet.has(id)) next.add(id);
+            else next.delete(id);
+          }
+          return next;
+        });
       })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
+      .catch(() => {
+        missing.forEach((id) => likedResolvedRef.current.delete(id));
+      });
   }, [posts, me]);
 
   const presence = usePresenceMap(userId ? [userId] : []);
 
   const handleToggleLike = async (post: Post) => {
     if (!me) return;
+    likedTouchedRef.current.add(post.id);
     const isLiked = liked.has(post.id);
     setLiked((prev) => {
       const next = new Set(prev);
@@ -232,7 +251,7 @@ export function UserProfileView() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <PageHeader
-        title={isMe ? "Your profile" : user.name}
+        title={isMe ? "Your profile" : user.name || user.username}
         description={`@${user.username}`}
       />
 
@@ -248,7 +267,7 @@ export function UserProfileView() {
                     alt={user.name}
                   />
                   <AvatarFallback className="text-xl">
-                    {initials(user.name)}
+                    {initials(user.name || user.username)}
                   </AvatarFallback>
                 </Avatar>
                 <PresenceDot
@@ -257,7 +276,9 @@ export function UserProfileView() {
                 />
               </div>
               <div className="pb-1">
-                <h2 className="font-display text-xl font-bold">{user.name}</h2>
+                <h2 className="font-display text-xl font-bold">
+                  {user.name || user.username}
+                </h2>
                 <p className="text-sm text-muted-foreground">
                   @{user.username}
                 </p>

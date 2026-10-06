@@ -113,11 +113,13 @@ export default function ProfilePage() {
                   alt={profile.name}
                 />
                 <AvatarFallback className="text-xl">
-                  {initials(profile.name)}
+                  {initials(profile.name || profile.username)}
                 </AvatarFallback>
               </Avatar>
               <div className="pb-1">
-                <h1 className="font-display text-xl font-bold">{profile.name}</h1>
+                <h1 className="font-display text-xl font-bold">
+                  {profile.name || profile.username}
+                </h1>
                 <p className="text-sm text-muted-foreground">@{profile.username}</p>
               </div>
             </div>

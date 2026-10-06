@@ -3,8 +3,6 @@
 import * as React from "react";
 import {
   Download,
-  ExternalLink,
-  FileText,
   Heart,
   MessageCircle,
   MoreHorizontal,
@@ -35,8 +33,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { deleteNote, incrementNoteDownload } from "@/lib/services/notes";
-import { cloudinaryPdfPageUrl, timeAgo, isOwnedBy } from "@/lib/utils";
-import type { Note, UserProfile } from "@/types";
+import { timeAgo, isOwnedBy } from "@/lib/utils";
+import { PdfPreviewDialog } from "@/components/shared/pdf-preview-dialog";
+import type { Note, NoteFile, UserProfile } from "@/types";
 import { toast } from "sonner";
 
 export function NoteCard({
@@ -61,6 +60,8 @@ export function NoteCard({
   const isOwner = isOwnedBy(note.uploaderId, note.uploaderUsername, currentUser);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  /** Which attached PDF the tap-to-preview dialog is showing, if any. */
+  const [previewFile, setPreviewFile] = React.useState<NoteFile | null>(null);
 
   const handleDelete = async () => {
     setBusy(true);
@@ -154,37 +155,18 @@ export function NoteCard({
 
         {note.files?.length ? (
           <div className="space-y-2">
-            {note.files.map((file) => {
-              const preview = cloudinaryPdfPageUrl(file.url);
-              return (
-                <div key={`${file.url}-${file.name}`} className="space-y-1.5">
-                  <FileChip file={file} onDownload={handleDownload} />
-                  {preview ? (
-                    <div className="overflow-hidden rounded-lg border">
-                      <div className="flex items-center gap-1.5 border-b bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground">
-                        <FileText className="h-3.5 w-3.5" />
-                        <span className="truncate">Preview</span>
-                        <a
-                          href={file.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={handleDownload}
-                          className="ml-auto inline-flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" /> Open
-                        </a>
-                      </div>
-                      <img
-                        src={preview}
-                        alt={`First page preview of ${file.name}`}
-                        className="max-h-64 w-full bg-muted/30 object-contain"
-                        loading="lazy"
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+            {note.files.map((file) => (
+              <FileChip
+                key={`${file.url}-${file.name}`}
+                file={file}
+                onDownload={handleDownload}
+                onPreview={
+                  file.type === "application/pdf" || /\.pdf$/i.test(file.name)
+                    ? () => setPreviewFile(file)
+                    : undefined
+                }
+              />
+            ))}
           </div>
         ) : null}
 
@@ -212,6 +194,15 @@ export function NoteCard({
             <span className="sr-only">downloads</span>
           </span>
         </div>
+
+        <PdfPreviewDialog
+          file={previewFile}
+          open={previewFile !== null}
+          onOpenChange={(next) => {
+            if (!next) setPreviewFile(null);
+          }}
+          onOpenFile={handleDownload}
+        />
       </CardContent>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

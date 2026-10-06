@@ -212,17 +212,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       src={profile.profilePhotoUrl || DEFAULT_AVATAR}
                       alt={profile.name}
                     />
-                    <AvatarFallback>{initials(profile.name)}</AvatarFallback>
+                    <AvatarFallback>
+                      {initials(profile.name || profile.username)}
+                    </AvatarFallback>
                   </Avatar>
                   <span className="hidden text-sm font-semibold sm:inline">
-                    {profile.name}
+                    {profile.name || profile.username}
                   </span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
                   <div className="flex flex-col">
-                    <span>{profile.name}</span>
+                    <span>{profile.name || profile.username}</span>
                     <span className="text-xs font-normal text-muted-foreground">
                       @{profile.username}
                     </span>

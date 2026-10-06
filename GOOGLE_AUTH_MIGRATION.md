@@ -1,3 +1,4 @@
+
 # Phone Authentication → Google Authentication Migration
 
 This document explains what actually happens to **existing users, profiles and

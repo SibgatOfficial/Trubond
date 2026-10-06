@@ -41,6 +41,10 @@ export default function HomePage() {
     toast.error("Failed to load more posts.")
   );
   const [liked, setLiked] = React.useState<Set<string>>(new Set());
+  /** Post ids whose like-state has already been fetched from the server. */
+  const likedResolvedRef = React.useRef<Set<string>>(new Set());
+  /** Post ids the user toggled locally — never overwritten by a fetch. */
+  const likedTouchedRef = React.useRef<Set<string>>(new Set());
   const [followingIds, setFollowingIds] = React.useState<Set<string>>(new Set());
   const [followingLoaded, setFollowingLoaded] = React.useState(false);
   const [tab, setTab] = React.useState<FeedTab>("for-you");
@@ -81,21 +85,41 @@ export default function HomePage() {
     };
   }, [profile]);
 
-  // Resolve which posts the current user has liked.
+  /**
+   * Resolve which posts the current user has liked — ONCE per post id.
+   *
+   * This used to re-run on every `posts` change (which each optimistic like
+   * causes) and replace the whole set with a pre-commit server response,
+   * clobbering the optimistic toggle and desyncing the heart from the count —
+   * the "like goes to 0 / comes back" bug. Ids are now resolved exactly once,
+   * results are merged (never replaced), and ids the user toggled while the
+   * fetch was in flight are left to local state (which the transaction then
+   * agrees with).
+   */
   React.useEffect(() => {
     if (!profile || posts.length === 0) return;
-    let active = true;
-    getLikedPostIds(
-      posts.map((p) => p.id),
-      profile.id
-    )
-      .then((set) => {
-        if (active) setLiked(set);
+    const missing = posts
+      .map((p) => p.id)
+      .filter((id) => !likedResolvedRef.current.has(id));
+    if (missing.length === 0) return;
+    missing.forEach((id) => likedResolvedRef.current.add(id));
+
+    getLikedPostIds(missing, profile.id)
+      .then((serverSet) => {
+        setLiked((prev) => {
+          const next = new Set(prev);
+          for (const id of missing) {
+            if (likedTouchedRef.current.has(id)) continue;
+            if (serverSet.has(id)) next.add(id);
+            else next.delete(id);
+          }
+          return next;
+        });
       })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
+      .catch(() => {
+        // Un-resolve so a later snapshot retries these ids.
+        missing.forEach((id) => likedResolvedRef.current.delete(id));
+      });
   }, [posts, profile]);
 
   /**
@@ -148,6 +172,7 @@ export default function HomePage() {
 
   const handleToggleLike = async (post: Post) => {
     if (!profile) return;
+    likedTouchedRef.current.add(post.id);
     const isLiked = liked.has(post.id);
     // Optimistic update
     setLiked((prev) => {

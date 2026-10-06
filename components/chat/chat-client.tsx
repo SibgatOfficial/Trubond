@@ -391,7 +391,7 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
           {message.replyTo ? (
             <button
               type="button"
-              onClick={() => scrollToMessage(message.replyTo!.messageId)}
+              onClick={() => scrollToMessage(message.replyTo!.id)}
               title="Jump to quoted message"
               className={`mb-1.5 block w-full rounded-md border-l-2 px-2 py-1 text-left text-xs transition-opacity hover:opacity-80 ${
                 isOwn

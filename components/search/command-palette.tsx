@@ -230,7 +230,13 @@ export function CommandPalette() {
                   <CommandItem
                     key={person.id}
                     value={`person-${person.id}`}
-                    onSelect={() => go("/profile")}
+                    onSelect={() =>
+                      go(
+                        person.id === profile?.id
+                          ? "/profile"
+                          : `/user?u=${encodeURIComponent(person.id)}`
+                      )
+                    }
                   >
                     <Avatar className="h-6 w-6">
                       <AvatarImage

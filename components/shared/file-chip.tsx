@@ -39,10 +39,17 @@ export interface AttachedFile {
 export function FileChip({
   file,
   onDownload,
+  onPreview,
   className,
 }: {
   file: AttachedFile;
   onDownload?: () => void;
+  /**
+   * When provided, tapping the chip opens this in-app preview instead of
+   * navigating to the raw file — used for PDFs, whose raw delivery Cloudinary
+   * blocks by default.
+   */
+  onPreview?: () => void;
   className?: string;
 }) {
   const kind = fileKindLabel(file.type, file.name);
@@ -53,7 +60,15 @@ export function FileChip({
       target="_blank"
       rel="noopener noreferrer"
       download={file.name}
-      onClick={onDownload}
+      onClick={(event) => {
+        if (onPreview) {
+          // Tap-to-preview: stay in-app instead of opening the raw file.
+          event.preventDefault();
+          onPreview();
+          return;
+        }
+        onDownload?.();
+      }}
       className={cn(
         "group flex items-center gap-3 rounded-lg border bg-card p-2.5 transition-colors hover:border-primary/40 hover:bg-accent",
         className
