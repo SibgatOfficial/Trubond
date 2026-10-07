@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Link2, MessageSquare, Newspaper, School } from "lucide-react";
 import { useAuth } from "@/context/auth-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -9,12 +9,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { PresenceDot } from "@/components/shared/presence-dot";
 import { FollowButton } from "@/components/profile/follow-button";
 import { SocialLinks } from "@/components/profile/social-links";
-import { PostCard } from "@/components/feed/post-card";
+import { ProfilePostCard } from "@/components/profile/profile-post-card";
+import { ProfileProjectsSection } from "@/components/profile/profile-projects-section";
+import { type ProjectSubTab } from "@/components/profile/profile-projects-section";
+import { ProfileEventsSection } from "@/components/profile/profile-events-section";
+import { type EventSubTab } from "@/components/profile/profile-events-section";
+import { ProfileStatsGrid } from "@/components/profile/profile-stats-grid";
+import { type ProfileStatKey } from "@/components/profile/profile-stats-grid";
+import { FollowListDialog } from "@/components/profile/follow-list-dialog";
 import { CommentsDialog } from "@/components/feed/comments-dialog";
 import { getUserByUsername, getUserProfile } from "@/lib/services/users";
 import { isFollowing } from "@/lib/services/follows";
@@ -24,13 +32,20 @@ import {
   subscribeToUserPosts,
   toggleLike,
 } from "@/lib/services/posts";
+import {
+  getOwnedProjectsByUsername,
+  subscribeToOwnedProjects,
+  subscribeToUserProjects,
+} from "@/lib/services/projects";
 import { notifySafely } from "@/lib/services/notifications";
-import { getJoinedEventIds } from "@/lib/services/events";
+import { getCreatedEventsByUsername, getEventsByIds, getJoinedEventIds, subscribeToCreatedEvents } from "@/lib/services/events";
 import { getUserActivityCounts } from "@/lib/services/stats";
 import { usePresenceMap } from "@/hooks/use-presence";
 import { DEFAULT_AVATAR, initials } from "@/lib/utils";
-import type { Post, UserProfile } from "@/types";
+import type { EventItem, Post, Project, UserProfile } from "@/types";
 import { toast } from "sonner";
+
+type UserProfileTab = "posts" | "projects" | "events";
 
 /**
  * Another user's profile.
@@ -54,11 +69,23 @@ export function UserProfileView() {
   /** Post ids the user toggled locally — never overwritten by a fetch. */
   const likedTouchedRef = React.useRef<Set<string>>(new Set());
   const [commentsPostId, setCommentsPostId] = React.useState<string | null>(null);
+  const [memberProjects, setMemberProjects] = React.useState<Project[]>([]);
+  const [ownedProjects, setOwnedProjects] = React.useState<Project[]>([]);
+  const [joinedEvents, setJoinedEvents] = React.useState<EventItem[]>([]);
+  const [createdEvents, setCreatedEvents] = React.useState<EventItem[]>([]);
+  const [tab, setTab] = React.useState<UserProfileTab>("posts");
+  const [projectSubTab, setProjectSubTab] = React.useState<ProjectSubTab>("joined");
+  const [eventSubTab, setEventSubTab] = React.useState<EventSubTab>("joined");
+  const [followMode, setFollowMode] = React.useState<"followers" | "following" | null>(null);
+  const tabsRef = React.useRef<HTMLDivElement>(null);
+  const router = useRouter();
   const [activity, setActivity] = React.useState<{
     notes: number | null;
     projects: number | null;
+    ownedProjects: number | null;
     events: number | null;
-  }>({ notes: null, projects: null, events: null });
+    createdEvents: number | null;
+  }>({ notes: null, projects: null, ownedProjects: null, events: null, createdEvents: null });
 
   React.useEffect(() => {
     if (!userId) return;
@@ -72,7 +99,9 @@ export function UserProfileView() {
         setActivity({
           notes: counts.notes,
           projects: counts.projects,
+          ownedProjects: counts.ownedProjects,
           events: joinedIds.size,
+          createdEvents: counts.createdEvents,
         });
       }
     })();
@@ -122,6 +151,98 @@ export function UserProfileView() {
   React.useEffect(() => {
     if (!userId) return;
     return subscribeToUserPosts(userId, setPosts);
+  }, [userId]);
+
+  // Projects: membership stream + owned stream (live uid) + legacy username
+  // sweep for pre-migration docs. Reset on user change — listeners are per
+  // user and stale lists would otherwise flash.
+  React.useEffect(() => {
+    if (!userId) return;
+    setMemberProjects([]);
+    setOwnedProjects([]);
+    const unsubMember = subscribeToUserProjects(userId, setMemberProjects);
+    const unsubOwned = subscribeToOwnedProjects(userId, (live) => {
+      setOwnedProjects((prev) => {
+        const legacy = prev.filter((p) => p.ownerId !== userId);
+        const byId = new Map(legacy.map((p) => [p.id, p]));
+        live.forEach((p) => byId.set(p.id, p));
+        return Array.from(byId.values());
+      });
+    });
+    let active = true;
+    getUserProfile(userId)
+      .then((byId) => byId ?? getUserByUsername(userId))
+      .then((resolved) => {
+        if (!active || !resolved?.username) return;
+        return getOwnedProjectsByUsername(resolved.username);
+      })
+      .then((legacy) => {
+        if (!active || !legacy || legacy.length === 0) return;
+        setOwnedProjects((prev) => {
+          const byId = new Map(prev.map((p) => [p.id, p]));
+          legacy.forEach((p) => {
+            if (!byId.has(p.id)) byId.set(p.id, p);
+          });
+          return Array.from(byId.values());
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      unsubMember();
+      unsubOwned();
+    };
+  }, [userId]);
+
+  // Events: joined ids resolved to full docs (not the first events page) plus
+  // the created stream and legacy username sweep.
+  React.useEffect(() => {
+    if (!userId) return;
+    setJoinedEvents([]);
+    setCreatedEvents([]);
+    let active = true;
+    const unsubCreated = subscribeToCreatedEvents(userId, (live) => {
+      setCreatedEvents((prev) => {
+        const legacy = prev.filter((e) => e.createdBy !== userId);
+        const byId = new Map(legacy.map((e) => [e.id, e]));
+        live.forEach((e) => byId.set(e.id, e));
+        return Array.from(byId.values());
+      });
+    });
+    (async () => {
+      try {
+        const [joinedIds, resolved] = await Promise.all([
+          getJoinedEventIds(userId),
+          getUserProfile(userId).then(
+            (byId) => byId ?? getUserByUsername(userId)
+          ),
+        ]);
+        if (!active) return;
+        const [docs, legacy] = await Promise.all([
+          joinedIds.size > 0 ? getEventsByIds(Array.from(joinedIds)) : [],
+          resolved?.username
+            ? getCreatedEventsByUsername(resolved.username)
+            : [],
+        ]);
+        if (!active) return;
+        setJoinedEvents(docs);
+        if (legacy.length > 0) {
+          setCreatedEvents((prev) => {
+            const byId = new Map(prev.map((e) => [e.id, e]));
+            legacy.forEach((e) => {
+              if (!byId.has(e.id)) byId.set(e.id, e);
+            });
+            return Array.from(byId.values());
+          });
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    })();
+    return () => {
+      active = false;
+      unsubCreated();
+    };
   }, [userId]);
 
   /**
@@ -184,7 +305,7 @@ export function UserProfileView() {
           actor: me,
           type: "like",
           targetId: post.id,
-          href: "/home",
+          href: `/post?id=${encodeURIComponent(post.id)}`,
         });
       }
     } catch (error) {
@@ -215,6 +336,34 @@ export function UserProfileView() {
       incrementViewCount(post.id, me.id).catch(() => undefined);
     },
     [me]
+  );
+
+  const scrollToTabs = React.useCallback(() => {
+    window.setTimeout(() => {
+      tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }, []);
+
+  const handleStatSelect = React.useCallback(
+    (key: ProfileStatKey) => {
+      if (key === "posts") {
+        setTab("posts");
+        scrollToTabs();
+      } else if (key === "projects") {
+        setTab("projects");
+        setProjectSubTab("joined");
+        scrollToTabs();
+      } else if (key === "events") {
+        setTab("events");
+        setEventSubTab("joined");
+        scrollToTabs();
+      } else if (key === "notes") {
+        router.push("/notes");
+      } else {
+        setFollowMode(key);
+      }
+    },
+    [router, scrollToTabs]
   );
 
   if (!userId) {
@@ -376,66 +525,102 @@ export function UserProfileView() {
             <SocialLinks links={user.socialLinks} />
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {[
-              { label: "Posts", value: user.postCount ?? 0 },
-              { label: "Notes", value: activity.notes },
-              { label: "Projects", value: activity.projects },
-              { label: "Events", value: activity.events },
-              { label: "Followers", value: user.followerCount ?? 0 },
-              { label: "Following", value: user.followingCount ?? 0 },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-lg bg-muted/60 p-3 text-center"
-              >
-                <p className="text-lg font-bold text-primary">
-                  {stat.value ?? "—"}
-                </p>
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            <ProfileStatsGrid
+              stats={[
+                { key: "posts", label: "Posts", value: user.postCount ?? 0 },
+                { key: "notes", label: "Notes", value: activity.notes },
+                { key: "projects", label: "Projects", value: activity.projects },
+                { key: "events", label: "Events", value: activity.events },
+                { key: "followers", label: "Followers", value: user.followerCount ?? 0 },
+                { key: "following", label: "Following", value: user.followingCount ?? 0 },
+              ]}
+              onSelect={handleStatSelect}
+            />
+          </CardContent>
+        </Card>
 
-      {posts.length === 0 ? (
-        <EmptyState
-          animation="empty"
-          icon={Newspaper}
-          title={isMe ? "You haven't posted yet" : `${user.name} hasn't posted yet`}
-        />
-      ) : (
-        posts.map((post) => (
-          <PostCard
-            key={post.id}
-            post={post}
-            currentUser={me ?? user}
-            liked={liked.has(post.id)}
-            onToggleLike={handleToggleLike}
-            onOpenComments={setCommentsPostId}
-            onDeleted={(id) =>
-              setPosts((prev) => prev.filter((item) => item.id !== id))
+        <div ref={tabsRef} className="scroll-mt-20">
+          <Tabs value={tab} onValueChange={(value) => setTab(value as UserProfileTab)}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="posts">Posts ({posts.length})</TabsTrigger>
+              <TabsTrigger value="projects">Projects</TabsTrigger>
+              <TabsTrigger value="events">Events</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="posts" className="space-y-3">
+              {posts.length === 0 ? (
+                <EmptyState
+                  animation="empty"
+                  icon={Newspaper}
+                  title={isMe ? "You haven't posted yet" : `${user.name} hasn't posted yet`}
+                />
+              ) : (
+                posts.map((post) => (
+                  <ProfilePostCard
+                    key={post.id}
+                    post={post}
+                    currentUser={me ?? user}
+                    liked={liked.has(post.id)}
+                    onToggleLike={handleToggleLike}
+                    onOpenComments={setCommentsPostId}
+                    onDeleted={(id) =>
+                      setPosts((prev) => prev.filter((item) => item.id !== id))
+                    }
+                    onView={handleView}
+                    authorOnline={online}
+                  />
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="projects" className="space-y-3">
+              <ProfileProjectsSection
+                viewer={me ?? user}
+                owner={user}
+                memberProjects={memberProjects}
+                ownedProjects={ownedProjects}
+                subTab={projectSubTab}
+                onSubTabChange={setProjectSubTab}
+              />
+            </TabsContent>
+
+            <TabsContent value="events" className="space-y-3">
+              <ProfileEventsSection
+                viewer={me ?? user}
+                owner={user}
+                joinedEvents={joinedEvents}
+                createdEvents={createdEvents}
+                subTab={eventSubTab}
+                onSubTabChange={setEventSubTab}
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {me ? (
+          <CommentsDialog
+            postId={commentsPostId}
+            open={commentsPostId !== null}
+            onOpenChange={(open) => {
+              if (!open) setCommentsPostId(null);
+            }}
+            currentUser={me}
+            postAuthorId={
+              posts.find((post) => post.id === commentsPostId)?.authorId ?? null
             }
-            onView={handleView}
-            authorOnline={online}
           />
-        ))
-      )}
+        ) : null}
 
-      {me ? (
-        <CommentsDialog
-          postId={commentsPostId}
-          open={commentsPostId !== null}
-          onOpenChange={(open) => {
-            if (!open) setCommentsPostId(null);
-          }}
-          currentUser={me}
-          postAuthorId={
-            posts.find((post) => post.id === commentsPostId)?.authorId ?? null
-          }
-        />
-      ) : null}
-    </div>
-  );
-}
+        {followMode && (
+          <FollowListDialog
+            userId={user.id}
+            mode={followMode}
+            open={followMode !== null}
+            onOpenChange={(open) => {
+              if (!open) setFollowMode(null);
+            }}
+          />
+        )}
+      </div>
+    );
+  }

@@ -40,6 +40,23 @@ export default function EventsPage() {
     toast.error("Failed to load more events.")
   );
   const [joined, setJoined] = React.useState<Set<string>>(new Set());
+  /**
+   * Event ids whose membership the server has already answered for.
+   *
+   * Claimed BEFORE each async resolve and by join/leave handlers, so a slow
+   * response can never re-check (and possibly revert) an optimistic toggle —
+   * resolve results are only ever unioned in for ids still pending.
+   */
+  const joinedResolvedRef = React.useRef<Set<string>>(new Set());
+  /**
+   * Ids the user explicitly toggled (join/leave) this session.
+   *
+   * `joinedResolvedRef` alone can't close the race: a resolve started before
+   * the toggle holds the id in its `pending` array and may return stale truth
+   * ("still joined") after the leave committed. Unioning skips anything in
+   * this set — the user's last click always wins until a fresh page load.
+   */
+  const joinedUserDecidedRef = React.useRef<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(true);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [ticketEvent, setTicketEvent] = React.useState<EventItem | null>(null);
@@ -56,26 +73,53 @@ export default function EventsPage() {
     return () => unsubscribe();
   }, [applyFirstPage]);
 
+  /**
+   * Which of the loaded events this user has joined.
+   *
+   * Re-runs when the event list grows (first page, live updates, load-more)
+   * but only ever resolves ids nobody has answered for yet. The service is
+   * given those ids so its legacy per-doc probes are bounded to what's on
+   * screen — and if its collection-group query fails, the probes still
+   * answer correctly instead of the whole call rejecting into a void
+   * (which is exactly how joins used to vanish on refresh).
+   */
+  const resolveJoined = React.useCallback(
+    (eventIds: string[]) => {
+      if (!profile || eventIds.length === 0) return;
+      const pending = eventIds.filter(
+        (id) => !joinedResolvedRef.current.has(id)
+      );
+      if (pending.length === 0) return;
+      pending.forEach((id) => joinedResolvedRef.current.add(id));
+      getJoinedEventIds(profile.id, pending)
+        .then((serverSet) => {
+          setJoined((prev) => {
+            const next = new Set(prev);
+            serverSet.forEach((id) => {
+              if (pending.includes(id) && !joinedUserDecidedRef.current.has(id)) {
+                next.add(id);
+              }
+            });
+            return next;
+          });
+        })
+        .catch((error) => console.error("Failed to resolve joins:", error));
+    },
+    [profile]
+  );
+
   React.useEffect(() => {
-    if (!profile) return;
-    let active = true;
-    getJoinedEventIds(profile.id)
-      .then((set) => {
-        if (active) setJoined(set);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-    // Deliberately NOT keyed on events.length: that re-ran the whole scan every
-    // time any event anywhere changed. Joins/leaves update the set locally.
-  }, [profile]);
+    resolveJoined(events.map((event) => event.id));
+  }, [events, resolveJoined]);
 
   if (!profile) return null;
 
   const handleJoin = async (event: EventItem) => {
     try {
       await joinEvent(event.id, profile.id);
+      // Claim before mutating: an in-flight resolve must never undo this.
+      joinedResolvedRef.current.add(event.id);
+      joinedUserDecidedRef.current.add(event.id);
       setJoined((prev) => new Set(prev).add(event.id));
       toast.success("Registered for the event!");
       // Ping the organiser — never yourself.
@@ -97,6 +141,9 @@ export default function EventsPage() {
   const handleLeave = async (event: EventItem) => {
     try {
       await leaveEvent(event.id, profile.id);
+      // Claim before mutating: an in-flight resolve must never undo this.
+      joinedResolvedRef.current.add(event.id);
+      joinedUserDecidedRef.current.add(event.id);
       setJoined((prev) => {
         const next = new Set(prev);
         next.delete(event.id);

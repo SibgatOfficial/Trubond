@@ -156,10 +156,12 @@ export function NoteCommentsDialog({
               userId={comment.authorId}
               className="text-sm font-semibold hover:text-primary hover:underline"
             >
-              @{comment.authorUsername}
+              {/* Real name first; old comments without `authorName` fall
+                  back to the handle. */}
+              {comment.authorName || comment.authorUsername}
             </UserLink>
             <span className="text-xs text-muted-foreground">
-              {timeAgo(comment.createdAt)}
+              @{comment.authorUsername} · {timeAgo(comment.createdAt)}
             </span>
           </div>
           <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">

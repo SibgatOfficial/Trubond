@@ -57,6 +57,14 @@ export default function NotesPage() {
     toast.error("Failed to load more notes.")
   );
   const [upvoted, setUpvoted] = React.useState<Set<string>>(new Set());
+  /**
+   * Note ids whose upvote state the server has already answered for.
+   *
+   * The resolver below runs again whenever the note list grows (first page,
+   * load-more), but it must never re-query ids we already know — otherwise a
+   * slow collection-group response could overwrite an optimistic toggle.
+   */
+  const upvoteCheckedRef = React.useRef<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(true);
   const [subject, setSubject] = React.useState(ALL);
   const [branch, setBranch] = React.useState(ALL);
@@ -82,18 +90,37 @@ export default function NotesPage() {
     return () => unsubscribe();
   }, [applyFirstPage]);
 
+  /**
+   * Which of the loaded notes this user has upvoted.
+   *
+   * Passing `noteIds` lets the service probe legacy upvote docs (written
+   * before the `userId` field existed) directly instead of skipping them.
+   * Ids are claimed BEFORE the async call so a re-run (e.g. load-more, or an
+   * optimistic toggle rewriting `notes`) never re-checks or reverts them —
+   * results are only ever unioned in, never replaced.
+   */
+  const resolveUpvotes = React.useCallback(
+    (noteIds: string[]) => {
+      if (!profile || noteIds.length === 0) return;
+      const pending = noteIds.filter((id) => !upvoteCheckedRef.current.has(id));
+      if (pending.length === 0) return;
+      pending.forEach((id) => upvoteCheckedRef.current.add(id));
+      getUpvotedNoteIds(profile.id, pending)
+        .then((serverSet) => {
+          setUpvoted((prev) => {
+            const next = new Set(prev);
+            serverSet.forEach((id) => next.add(id));
+            return next;
+          });
+        })
+        .catch((error) => console.error("Failed to resolve upvotes:", error));
+    },
+    [profile]
+  );
+
   React.useEffect(() => {
-    if (!profile) return;
-    let active = true;
-    getUpvotedNoteIds(profile.id)
-      .then((set) => {
-        if (active) setUpvoted(set);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [profile]);
+    resolveUpvotes(notes.map((note) => note.id));
+  }, [notes, resolveUpvotes]);
 
   const subjects = React.useMemo(() => collectSubjects(notes), [notes]);
 

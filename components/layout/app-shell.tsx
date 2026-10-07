@@ -231,16 +231,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push("/profile")}>
+                <DropdownMenuItem onSelect={() => router.push("/profile")}>
                   <UserCircle /> My Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push("/settings")}>
+                <DropdownMenuItem onSelect={() => router.push("/settings")}>
                   <Settings /> Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
-                  onClick={handleSignOut}
+                  onSelect={handleSignOut}
                 >
                   <LogOut /> Sign out
                 </DropdownMenuItem>

@@ -4,7 +4,7 @@ import {
   collectionGroup,
   deleteDoc,
   doc,
-  documentId,
+  getDoc,
   getDocs,
   increment,
   limit,
@@ -182,23 +182,55 @@ export async function toggleNoteUpvote(
       transaction.update(noteRef, { upvoteCount: increment(-1) });
       return false;
     }
-    transaction.set(voteRef, { votedAt: nowIso() });
+    transaction.set(voteRef, { userId, votedAt: nowIso() });
     transaction.update(noteRef, { upvoteCount: increment(1) });
     return true;
   });
 }
 
-/** Every note the user has upvoted — one collection-group query. */
-export async function getUpvotedNoteIds(userId: string): Promise<Set<string>> {
+/**
+ * Every note the user has upvoted — one collection-group query on the `userId`
+ * field (`documentId()` cannot be matched against a bare uid in a
+ * collection-group). Legacy upvotes (uid as id only) are probed per note.
+ */
+export async function getUpvotedNoteIds(
+  userId: string,
+  /** When given, legacy upvotes are probed only within these notes. */
+  noteIds?: string[]
+): Promise<Set<string>> {
   const ids = new Set<string>();
-  const snap = await getDocs(
-    query(collectionGroup(db, "upvotes"), where(documentId(), "==", userId))
-  );
-  snap.forEach((d) => {
-    // notes/{noteId}/upvotes/{userId} — two parents up is the note.
-    const noteId = d.ref.parent.parent?.id;
-    if (noteId) ids.add(noteId);
-  });
+  // Non-fatal: the legacy per-doc probes below still run if this fails.
+  try {
+    const snap = await getDocs(
+      query(collectionGroup(db, "upvotes"), where("userId", "==", userId))
+    );
+    snap.forEach((d) => {
+      // notes/{noteId}/upvotes/{userId} — two parents up is the note.
+      const noteId = d.ref.parent.parent?.id;
+      if (noteId) ids.add(noteId);
+    });
+  } catch (error) {
+    console.error("upvotes collection-group query failed:", error);
+  }
+  if (noteIds && noteIds.length > 0) {
+    try {
+      const checks = await Promise.all(
+        noteIds
+          .filter((id) => !ids.has(id))
+          .map(async (noteId) => ({
+            noteId,
+            exists: (
+              await getDoc(doc(db, "notes", noteId, "upvotes", userId))
+            ).exists(),
+          }))
+      );
+      checks.forEach(({ noteId, exists }) => {
+        if (exists) ids.add(noteId);
+      });
+    } catch (error) {
+      console.error("Legacy upvote sweep failed:", error);
+    }
+  }
   return ids;
 }
 
@@ -235,6 +267,7 @@ export async function addNoteComment(
   batch.set(doc(collection(db, "notes", noteId, "comments")), {
     authorId: author.id,
     authorUsername: author.username,
+    authorName: author.name,
     authorPhoto: author.profilePhotoUrl,
     text: text.trim(),
     parentId: parentId ?? null,

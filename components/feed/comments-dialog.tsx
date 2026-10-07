@@ -140,7 +140,7 @@ export function CommentsDialog({
     }
   };
 
-  const renderComment = (comment: Comment, isReply = false) => (
+  const renderComment = (comment: Comment, _isReply = false) => (
     <div className="flex gap-3">
       <UserLink userId={comment.authorId} stopPropagation={false}>
         <Avatar className="h-8 w-8">
@@ -158,10 +158,12 @@ export function CommentsDialog({
               userId={comment.authorId}
               className="text-sm font-semibold text-foreground"
             >
-              @{comment.authorUsername}
+              {/* Real name first; old comments without `authorName` fall
+                  back to the handle. */}
+              {comment.authorName || comment.authorUsername}
             </UserLink>
             <span className="text-xs text-muted-foreground">
-              {timeAgo(comment.createdAt)}
+              @{comment.authorUsername} · {timeAgo(comment.createdAt)}
             </span>
           </div>
           <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">

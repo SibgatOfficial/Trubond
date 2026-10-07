@@ -37,20 +37,6 @@ export function ConfirmDeleteDialog({
   busy?: boolean;
   onConfirm: () => void;
 }) {
-  // Safety net for the success-path freeze: if a parent (e.g. ProjectCard)
-  // unmounts this dialog while it is still open — because onDeleted removed
-  // the card before Radix ran its close cleanup — the body is left with
-  // `pointer-events: none` and the whole page stops responding to clicks.
-  // Resetting it on unmount guarantees the page can never stay frozen,
-  // no matter what order a future handler closes/removes in.
-  React.useEffect(() => {
-    return () => {
-      if (typeof document !== "undefined") {
-        document.body.style.pointerEvents = "";
-      }
-    };
-  }, []);
-
   // While the async delete is in flight, ESC/backdrop must not race it:
   // Radix would flip `open` to false and unmount cleanup mid-await.
   const handleOpenChange = (next: boolean) => {

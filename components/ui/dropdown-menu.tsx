@@ -5,7 +5,17 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { Check, ChevronRight, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const DropdownMenu = DropdownMenuPrimitive.Root;
+// Non-modal by default: a modal menu sets `body { pointer-events: none }`,
+// and any dialog opened from a menu item (delete confirms, edit dialogs)
+// inherits + restores that stale lock — freezing the whole page until reload.
+// Non-modal menus never take the lock, so dialogs opened from them can't wedge
+// the page. Pass `modal` explicitly if a menu ever truly needs to be modal.
+const DropdownMenu = ({
+  modal = false,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Root>) => (
+  <DropdownMenuPrimitive.Root modal={modal} {...props} />
+);
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
@@ -58,6 +68,10 @@ const DropdownMenuContent = React.forwardRef<
     <DropdownMenuPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
+      // Non-modal menus don't trap pointer events on `body`, so keep Radix's
+      // default close-focus behaviour: return focus to the trigger. (A global
+      // preventDefault here would strand focus on `body` and break keyboard
+      // reopening of the menu.)
       className={cn(
         "z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
         className

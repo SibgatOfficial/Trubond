@@ -174,9 +174,12 @@ export function CreateNoteDialog({
         fileHashes,
       });
 
-      toast.success("Note shared with your campus!");
-      reset();
+      // Close FIRST so the dialog + its Select portals unmount past the exit
+      // animation before the live subscription re-renders the list — same
+      // stuck `body { pointer-events: none }` race as the edit dialog.
       onOpenChange(false);
+      reset();
+      toast.success("Note shared with your campus!");
     } catch (error) {
       console.error(error);
       toast.error(

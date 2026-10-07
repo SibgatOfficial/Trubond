@@ -164,9 +164,12 @@ export function PostCard({
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
+            {/* non-modal: a modal menu would set `body { pointer-events: none }`,
+                and the delete dialog opened from it would inherit + restore that
+                stale lock — freezing the page until reload. */}
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                onClick={() => {
+                onSelect={() => {
                   setDraft(post.text);
                   setEditing(true);
                 }}

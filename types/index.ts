@@ -55,6 +55,8 @@ export interface Comment {
   id: string;
   authorId: string;
   authorUsername: string;
+  /** Real name; absent on comments written before it was stored. */
+  authorName?: string;
   authorPhoto?: string;
   text: string;
   createdAt: FirestoreDate;
@@ -233,6 +235,8 @@ export interface NoteComment {
   id: string;
   authorId: string;
   authorUsername: string;
+  /** Real name; absent on comments written before it was stored. */
+  authorName?: string;
   authorPhoto?: string;
   text: string;
   createdAt: FirestoreDate;

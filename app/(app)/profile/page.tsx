@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
-  CalendarDays,
-  FolderKanban,
   Link2,
   Mail,
   Newspaper,
@@ -11,33 +10,77 @@ import {
   School,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-provider";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/empty-state";
 import { EditProfileDialog } from "@/components/profile/edit-profile-dialog";
 import { SocialLinks } from "@/components/profile/social-links";
-import { subscribeToUserPosts } from "@/lib/services/posts";
-import { subscribeToUserProjects } from "@/lib/services/projects";
-import { getJoinedEventIds, subscribeToEvents } from "@/lib/services/events";
+import { ProfilePostCard } from "@/components/profile/profile-post-card";
+import { ProfileProjectsSection } from "@/components/profile/profile-projects-section";
+import { type ProjectSubTab } from "@/components/profile/profile-projects-section";
+import { ProfileEventsSection } from "@/components/profile/profile-events-section";
+import { type EventSubTab } from "@/components/profile/profile-events-section";
+import { ProfileStatsGrid } from "@/components/profile/profile-stats-grid";
+import { type ProfileStatKey } from "@/components/profile/profile-stats-grid";
+import { FollowListDialog } from "@/components/profile/follow-list-dialog";
+import { CommentsDialog } from "@/components/feed/comments-dialog";
+import {
+  getLikedPostIds,
+  incrementViewCount,
+  subscribeToUserPosts,
+  toggleLike,
+} from "@/lib/services/posts";
+import {
+  getOwnedProjectsByUsername,
+  subscribeToOwnedProjects,
+  subscribeToUserProjects,
+} from "@/lib/services/projects";
+import {
+  getCreatedEventsByUsername,
+  getEventsByIds,
+  getJoinedEventIds,
+  subscribeToCreatedEvents,
+} from "@/lib/services/events";
 import { getUserActivityCounts } from "@/lib/services/stats";
-import { DEFAULT_AVATAR, initials, timeAgo } from "@/lib/utils";
+import { notifySafely } from "@/lib/services/notifications";
+import { usePresenceMap } from "@/hooks/use-presence";
+import { DEFAULT_AVATAR, initials } from "@/lib/utils";
 import type { EventItem, Post, Project } from "@/types";
 import { toast } from "sonner";
 
+type ProfileTab = "posts" | "projects" | "events";
+
 export default function ProfilePage() {
   const { profile, refreshProfile } = useAuth();
+  const router = useRouter();
   const [posts, setPosts] = React.useState<Post[]>([]);
-  const [projects, setProjects] = React.useState<Project[]>([]);
-  const [events, setEvents] = React.useState<EventItem[]>([]);
+  const [liked, setLiked] = React.useState<Set<string>>(new Set());
+  /** Post ids whose like-state has already been fetched from the server. */
+  const likedResolvedRef = React.useRef<Set<string>>(new Set());
+  /** Post ids the user toggled locally — never overwritten by a fetch. */
+  const likedTouchedRef = React.useRef<Set<string>>(new Set());
+  const [commentsPostId, setCommentsPostId] = React.useState<string | null>(null);
+  const [memberProjects, setMemberProjects] = React.useState<Project[]>([]);
+  const [ownedProjects, setOwnedProjects] = React.useState<Project[]>([]);
+  const [joinedEvents, setJoinedEvents] = React.useState<EventItem[]>([]);
+  const [createdEvents, setCreatedEvents] = React.useState<EventItem[]>([]);
   const [editOpen, setEditOpen] = React.useState(false);
+  const [tab, setTab] = React.useState<ProfileTab>("posts");
+  const [projectSubTab, setProjectSubTab] = React.useState<ProjectSubTab>("joined");
+  const [eventSubTab, setEventSubTab] = React.useState<EventSubTab>("joined");
+  const [followMode, setFollowMode] = React.useState<"followers" | "following" | null>(null);
+  const tabsRef = React.useRef<HTMLDivElement>(null);
   const [activity, setActivity] = React.useState<{
     notes: number | null;
     projects: number | null;
+    ownedProjects: number | null;
     events: number | null;
-  }>({ notes: null, projects: null, events: null });
+    createdEvents: number | null;
+  }>({ notes: null, projects: null, ownedProjects: null, events: null, createdEvents: null });
+
+  const presence = usePresenceMap(profile ? [profile.id] : []);
 
   // Aggregation counts — one read per 1,000 documents, so this stays cheap and
   // is not limited by how much of each list has been paginated in.
@@ -53,7 +96,9 @@ export default function ProfilePage() {
         setActivity({
           notes: counts.notes,
           projects: counts.projects,
+          ownedProjects: counts.ownedProjects,
           events: joinedIds.size,
+          createdEvents: counts.createdEvents,
         });
       }
     })();
@@ -74,32 +119,197 @@ export default function ProfilePage() {
   React.useEffect(() => {
     if (!profile) return;
     const unsubPosts = subscribeToUserPosts(profile.id, setPosts);
-    const unsubProjects = subscribeToUserProjects(profile.id, setProjects);
+    const unsubMember = subscribeToUserProjects(profile.id, setMemberProjects);
+    const unsubOwned = subscribeToOwnedProjects(profile.id, (live) => {
+      // Merge the legacy-username sweep in: same id space, so dedupe by id.
+      setOwnedProjects((prev) => {
+        const legacy = prev.filter((p) => p.ownerId !== profile.id);
+        const byId = new Map(legacy.map((p) => [p.id, p]));
+        live.forEach((p) => byId.set(p.id, p));
+        return Array.from(byId.values());
+      });
+    });
+    const unsubCreatedEvents = subscribeToCreatedEvents(profile.id, (live) => {
+      setCreatedEvents((prev) => {
+        const legacy = prev.filter((e) => e.createdBy !== profile.id);
+        const byId = new Map(legacy.map((e) => [e.id, e]));
+        live.forEach((e) => byId.set(e.id, e));
+        return Array.from(byId.values());
+      });
+    });
+    // One-shot legacy sweep for pre-migration docs (old uid, same username).
+    getOwnedProjectsByUsername(profile.username)
+      .then((legacy) => {
+        if (legacy.length === 0) return;
+        setOwnedProjects((prev) => {
+          const byId = new Map(prev.map((p) => [p.id, p]));
+          legacy.forEach((p) => {
+            if (!byId.has(p.id)) byId.set(p.id, p);
+          });
+          return Array.from(byId.values());
+        });
+      })
+      .catch(() => undefined);
+    getCreatedEventsByUsername(profile.username)
+      .then((legacy) => {
+        if (legacy.length === 0) return;
+        setCreatedEvents((prev) => {
+          const byId = new Map(prev.map((e) => [e.id, e]));
+          legacy.forEach((e) => {
+            if (!byId.has(e.id)) byId.set(e.id, e);
+          });
+          return Array.from(byId.values());
+        });
+      })
+      .catch(() => undefined);
     return () => {
       unsubPosts();
-      unsubProjects();
+      unsubMember();
+      unsubOwned();
+      unsubCreatedEvents();
     };
   }, [profile]);
 
+  // Joined events: resolve the attendee ids to full docs (NOT the first events
+  // page — that dropped joined events outside the page).
   React.useEffect(() => {
     if (!profile) return;
     let active = true;
-    const unsubscribe = subscribeToEvents(async (page) => {
+    (async () => {
       try {
-        // One collection-group query, then filter the events already in hand —
-        // previously this ran an attendees query per event and re-fetched every
-        // joined event document individually.
         const joinedIds = await getJoinedEventIds(profile.id);
-        if (active) setEvents(page.items.filter((event) => joinedIds.has(event.id)));
+        if (!active) return;
+        if (joinedIds.size === 0) {
+          setJoinedEvents([]);
+          return;
+        }
+        const docs = await getEventsByIds(Array.from(joinedIds));
+        if (active) setJoinedEvents(docs);
       } catch (error) {
         console.error(error);
       }
-    });
+    })();
     return () => {
       active = false;
-      unsubscribe();
     };
   }, [profile]);
+
+  // Resolve liked posts ONCE per id — merged, never replaced (same rationale
+  // as the home feed: replacing raced the optimistic like and desynced it).
+  React.useEffect(() => {
+    if (!profile || posts.length === 0) return;
+    const missing = posts
+      .map((post) => post.id)
+      .filter((id) => !likedResolvedRef.current.has(id));
+    if (missing.length === 0) return;
+    missing.forEach((id) => likedResolvedRef.current.add(id));
+
+    getLikedPostIds(missing, profile.id)
+      .then((serverSet) => {
+        setLiked((prev) => {
+          const next = new Set(prev);
+          for (const id of missing) {
+            if (likedTouchedRef.current.has(id)) continue;
+            if (serverSet.has(id)) next.add(id);
+            else next.delete(id);
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        missing.forEach((id) => likedResolvedRef.current.delete(id));
+      });
+  }, [posts, profile]);
+
+  const handleToggleLike = async (post: Post) => {
+    if (!profile) return;
+    likedTouchedRef.current.add(post.id);
+    const isLiked = liked.has(post.id);
+    setLiked((prev) => {
+      const next = new Set(prev);
+      if (isLiked) next.delete(post.id);
+      else next.add(post.id);
+      return next;
+    });
+    setPosts((prev) =>
+      prev.map((item) =>
+        item.id === post.id
+          ? { ...item, likeCount: Math.max(0, (item.likeCount ?? 0) + (isLiked ? -1 : 1)) }
+          : item
+      )
+    );
+    try {
+      const nowLiked = await toggleLike(post.id, profile.id);
+      setLiked((prev) => {
+        const next = new Set(prev);
+        if (nowLiked) next.add(post.id);
+        else next.delete(post.id);
+        return next;
+      });
+      if (nowLiked) {
+        notifySafely({
+          recipientId: post.authorId,
+          actor: profile,
+          type: "like",
+          targetId: post.id,
+          href: `/post?id=${encodeURIComponent(post.id)}`,
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      setLiked((prev) => {
+        const next = new Set(prev);
+        if (isLiked) next.add(post.id);
+        else next.delete(post.id);
+        return next;
+      });
+      setPosts((prev) =>
+        prev.map((item) =>
+          item.id === post.id
+            ? { ...item, likeCount: Math.max(0, (item.likeCount ?? 0) + (isLiked ? 1 : -1)) }
+            : item
+        )
+      );
+      toast.error("Failed to update like.");
+    }
+  };
+
+  const handleView = React.useCallback(
+    (post: Post) => {
+      if (!profile) return;
+      incrementViewCount(post.id, profile.id).catch(() => undefined);
+    },
+    [profile]
+  );
+
+  const scrollToTabs = React.useCallback(() => {
+    // Wait a frame so the tab switch renders before scrolling.
+    window.setTimeout(() => {
+      tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }, []);
+
+  const handleStatSelect = React.useCallback(
+    (key: ProfileStatKey) => {
+      if (key === "posts") {
+        setTab("posts");
+        scrollToTabs();
+      } else if (key === "projects") {
+        setTab("projects");
+        setProjectSubTab("joined");
+        scrollToTabs();
+      } else if (key === "events") {
+        setTab("events");
+        setEventSubTab("joined");
+        scrollToTabs();
+      } else if (key === "notes") {
+        router.push("/notes");
+      } else {
+        setFollowMode(key);
+      }
+    },
+    [router, scrollToTabs]
+  );
 
   if (!profile) return null;
 
@@ -176,111 +386,96 @@ export default function ProfilePage() {
             <SocialLinks links={profile.socialLinks} />
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {[
-              { label: "Posts", value: profile.postCount ?? 0 },
-              { label: "Notes", value: activity.notes },
-              { label: "Projects", value: activity.projects },
-              { label: "Events", value: activity.events },
-              { label: "Followers", value: profile.followerCount ?? 0 },
-              { label: "Following", value: profile.followingCount ?? 0 },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-lg bg-muted/60 p-3 text-center"
-              >
-                <p className="text-lg font-bold text-primary">
-                  {stat.value ?? "—"}
-                </p>
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-              </div>
-            ))}
-          </div>
+          <ProfileStatsGrid
+            stats={[
+              { key: "posts", label: "Posts", value: profile.postCount ?? 0 },
+              { key: "notes", label: "Notes", value: activity.notes },
+              { key: "projects", label: "Projects", value: activity.projects },
+              { key: "events", label: "Events", value: activity.events },
+              { key: "followers", label: "Followers", value: profile.followerCount ?? 0 },
+              { key: "following", label: "Following", value: profile.followingCount ?? 0 },
+            ]}
+            onSelect={handleStatSelect}
+          />
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="posts">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="posts">Posts</TabsTrigger>
-          <TabsTrigger value="projects">Projects</TabsTrigger>
-          <TabsTrigger value="events">Events</TabsTrigger>
-        </TabsList>
+      <div ref={tabsRef} className="scroll-mt-20">
+        <Tabs value={tab} onValueChange={(value) => setTab(value as ProfileTab)}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="posts">Posts ({posts.length})</TabsTrigger>
+            <TabsTrigger value="projects">Projects</TabsTrigger>
+            <TabsTrigger value="events">Events</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="posts" className="space-y-3">
-          {posts.length === 0 ? (
-            <EmptyState icon={Newspaper} title="No posts yet" />
-          ) : (
-            posts.map((post) => (
-              <Card key={post.id}>
-                <CardContent className="p-4">
-                  {post.text && (
-                    <p className="whitespace-pre-wrap break-words text-sm">
-                      {post.text}
-                    </p>
-                  )}
-                  {post.imageUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={post.imageUrl}
-                      alt="Post"
-                      className="mt-3 max-h-72 w-full rounded-lg border object-contain"
-                    />
-                  )}
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {timeAgo(post.createdAt)} · {post.likeCount ?? 0} likes ·{" "}
-                    {post.commentCount ?? 0} comments
-                  </p>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </TabsContent>
+          <TabsContent value="posts" className="space-y-3">
+            {posts.length === 0 ? (
+              <EmptyState icon={Newspaper} title="No posts yet" />
+            ) : (
+              posts.map((post) => (
+                <ProfilePostCard
+                  key={post.id}
+                  post={post}
+                  currentUser={profile}
+                  liked={liked.has(post.id)}
+                  onToggleLike={handleToggleLike}
+                  onOpenComments={setCommentsPostId}
+                  onDeleted={(id) =>
+                    setPosts((prev) => prev.filter((item) => item.id !== id))
+                  }
+                  onView={handleView}
+                  authorOnline={presence.get(post.authorId) ?? false}
+                />
+              ))
+            )}
+          </TabsContent>
 
-        <TabsContent value="projects" className="space-y-3">
-          {projects.length === 0 ? (
-            <EmptyState icon={FolderKanban} title="No projects joined" />
-          ) : (
-            projects.map((project) => (
-              <Card key={project.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{project.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="text-sm text-muted-foreground">
-                    {project.description}
-                  </p>
-                  {project.skillsRequired?.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {project.skillsRequired.map((skill) => (
-                        <Badge key={skill} variant="outline">
-                          {skill}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </TabsContent>
+          <TabsContent value="projects" className="space-y-3">
+            <ProfileProjectsSection
+              viewer={profile}
+              owner={profile}
+              memberProjects={memberProjects}
+              ownedProjects={ownedProjects}
+              subTab={projectSubTab}
+              onSubTabChange={setProjectSubTab}
+            />
+          </TabsContent>
 
-        <TabsContent value="events" className="space-y-3">
-          {events.length === 0 ? (
-            <EmptyState icon={CalendarDays} title="No events joined" />
-          ) : (
-            events.map((event) => (
-              <Card key={event.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{event.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0 text-sm text-muted-foreground">
-                  {event.location} · {timeAgo(event.date)}
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="events" className="space-y-3">
+            <ProfileEventsSection
+              viewer={profile}
+              owner={profile}
+              joinedEvents={joinedEvents}
+              createdEvents={createdEvents}
+              subTab={eventSubTab}
+              onSubTabChange={setEventSubTab}
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      <CommentsDialog
+        postId={commentsPostId}
+        open={commentsPostId !== null}
+        onOpenChange={(open) => {
+          if (!open) setCommentsPostId(null);
+        }}
+        currentUser={profile}
+        postAuthorId={
+          posts.find((post) => post.id === commentsPostId)?.authorId ?? null
+        }
+      />
+
+      {followMode && (
+        <FollowListDialog
+          userId={profile.id}
+          mode={followMode}
+          open={followMode !== null}
+          onOpenChange={(open) => {
+            if (!open) setFollowMode(null);
+          }}
+        />
+      )}
 
       <EditProfileDialog
         profile={profile}

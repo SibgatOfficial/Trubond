@@ -69,6 +69,69 @@ export async function fetchOlderEvents(
   );
 }
 
+/**
+ * Events the user created (organised). Single-field query — no composite index.
+ *
+ * Like projects, old events may carry the creator's pre-migration uid, so
+ * callers ALSO match `createdByUsername` client-side via `isOwnedBy`.
+ */
+export function subscribeToCreatedEvents(
+  userId: string,
+  callback: (events: EventItem[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, "events"),
+    where("createdBy", "==", userId),
+    limit(PAGE_SIZE.events)
+  );
+  return onSnapshot(q, (snap) => {
+    callback(
+      snap.docs.map((d) => eventMapper(d.id, d.data() as Record<string, unknown>, d))
+    );
+  });
+}
+
+/** One-shot fetch of events organised under a legacy username (see projects.ts). */
+export async function getCreatedEventsByUsername(
+  username: string
+): Promise<EventItem[]> {
+  const clean = username.trim().toLowerCase();
+  if (!clean) return [];
+  const snap = await getDocs(
+    query(
+      collection(db, "events"),
+      where("createdByUsername", "==", username),
+      limit(PAGE_SIZE.events)
+    )
+  );
+  return snap.docs.map((d) =>
+    eventMapper(d.id, d.data() as Record<string, unknown>, d)
+  );
+}
+
+/**
+ * The full event documents for a set of joined ids, in 30-id `in` chunks.
+ *
+ * The profile used to take only the first events page and filter it by joined
+ * ids — any joined event outside that page silently vanished. Fetching by id
+ * instead shows every joined event regardless of pagination.
+ */
+export async function getEventsByIds(ids: string[]): Promise<EventItem[]> {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (unique.length === 0) return [];
+  const results: EventItem[] = [];
+  for (let i = 0; i < unique.length; i += 30) {
+    const chunk = unique.slice(i, i + 30);
+    const snap = await getDocs(
+      query(collection(db, "events"), where(documentId(), "in", chunk))
+    );
+    snap.forEach((d) =>
+      results.push(eventMapper(d.id, d.data() as Record<string, unknown>, d))
+    );
+  }
+  return results;
+}
+
 export async function createEvent(
   creator: UserProfile,
   input: NewEventInput
@@ -93,27 +156,64 @@ export async function createEvent(
 }
 
 /**
- * Every event the user has joined, from ONE collection-group query.
+ * Every event the user has joined.
  *
- * The previous implementation loaded up to 200 events and then ran a separate
- * `attendees` query (up to 500 docs each) per event, and the events page re-ran
- * the whole thing whenever the event count changed. That is potentially ~100k
- * document reads to answer "which events am I in?".
+ * Two sources, BOTH non-fatal to each other:
+ *  1. Collection-group query on the `userId` FIELD (`documentId()` can't be
+ *     matched against a bare uid in a collection-group — that crash is what
+ *     made joins look like they never saved). Covers attendee docs written
+ *     after the fix.
+ *  2. Direct per-doc reads for legacy docs (uid as doc id only) — and as
+ *     insurance if (1) fails for any reason (rules, offline, index): without
+ *     the try/catch below a single failed query used to reject the whole
+ *     function, the caller's `.catch(() => empty)` swallowed it, and every
+ *     join silently vanished on refresh.
  *
- * The attendee document id IS the user id, so `documentId()` can filter the
- * whole collection group in a single round trip — and unlike a denormalised
- * `attendeeIds` array, this needs no migration: existing data already matches.
+ * Pass `eventIds` (the events the caller actually renders) to bound the
+ * legacy probes; without it a recent-events window is swept instead.
  */
-export async function getJoinedEventIds(userId: string): Promise<Set<string>> {
+export async function getJoinedEventIds(
+  userId: string,
+  eventIds?: string[]
+): Promise<Set<string>> {
   const joined = new Set<string>();
-  const snap = await getDocs(
-    query(collectionGroup(db, "attendees"), where(documentId(), "==", userId))
-  );
-  snap.forEach((d) => {
-    // events/{eventId}/attendees/{userId} — two parents up is the event.
-    const eventId = d.ref.parent.parent?.id;
-    if (eventId) joined.add(eventId);
-  });
+
+  try {
+    const snap = await getDocs(
+      query(collectionGroup(db, "attendees"), where("userId", "==", userId))
+    );
+    snap.forEach((d) => {
+      // events/{eventId}/attendees/{userId} — two parents up is the event.
+      const eventId = d.ref.parent.parent?.id;
+      if (eventId) joined.add(eventId);
+    });
+  } catch (error) {
+    console.error("attendees collection-group query failed:", error);
+  }
+
+  try {
+    let targets: string[];
+    if (eventIds) {
+      targets = eventIds.filter((id) => !joined.has(id));
+    } else {
+      // No id list given — sweep a recent window so legacy joins still show.
+      const recent = await getDocs(
+        query(collection(db, "events"), orderBy("date", "desc"), limit(50))
+      );
+      targets = recent.docs.map((d) => d.id).filter((id) => !joined.has(id));
+    }
+    await Promise.all(
+      targets.map(async (eventId) => {
+        const attendee = await getDoc(
+          doc(db, "events", eventId, "attendees", userId)
+        );
+        if (attendee.exists()) joined.add(eventId);
+      })
+    );
+  } catch (error) {
+    console.error("Legacy attendee probe failed:", error);
+  }
+
   return joined;
 }
 
@@ -137,7 +237,7 @@ export async function joinEvent(
     const max = data.maxAttendees as number | undefined;
     if (max && current >= max) throw new Error("Event is full");
 
-    transaction.set(attendeeRef, { joinedAt: nowIso() });
+    transaction.set(attendeeRef, { userId, joinedAt: nowIso() });
     transaction.update(eventRef, { attendeeCount: current + 1 });
     return true;
   });

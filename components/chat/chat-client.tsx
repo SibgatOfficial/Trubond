@@ -14,6 +14,7 @@ import {
   Reply,
   Send,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import { usePresenceMap } from "@/hooks/use-presence";
 import { PollMessage } from "@/components/chat/poll-message";
 import { CreatePollDialog } from "@/components/chat/create-poll-dialog";
 import { ChatFileMessage } from "@/components/chat/chat-file-message";
+import { RoomMembersSheet } from "@/components/chat/room-members-sheet";
 import { AnimationBurst } from "@/components/ui/lottie-animation";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -69,6 +71,7 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
   const [roomsLoading, setRoomsLoading] = React.useState(true);
   const [activeRoom, setActiveRoom] = React.useState<ChatRoom | null>(null);
   const [channelsOpen, setChannelsOpen] = React.useState(false);
+  const [membersOpen, setMembersOpen] = React.useState(false);
   const [sendTrigger, setSendTrigger] = React.useState(0);
   const [uploadPercent, setUploadPercent] = React.useState<number | null>(null);
   const [dragActive, setDragActive] = React.useState(false);
@@ -486,9 +489,11 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </button>
               </DropdownMenuTrigger>
+              {/* non-modal so the delete confirm opened from here never inherits
+                  a stale `body { pointer-events: none }` lock. */}
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  onClick={() =>
+                  onSelect={() =>
                     setReplyTarget({
                       id: message.id,
                       senderUsername: message.senderUsername,
@@ -498,16 +503,18 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
                 >
                   <Reply /> Reply
                 </DropdownMenuItem>
-                {isOwn && type === "text" ? (
+                {isOwn ? (
                   <>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setEditingMessageId(message.id);
-                        setEditDraft(message.text ?? "");
-                      }}
-                    >
-                      <Pencil /> Edit
-                    </DropdownMenuItem>
+                    {type === "text" ? (
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          setEditingMessageId(message.id);
+                          setEditDraft(message.text ?? "");
+                        }}
+                      >
+                        <Pencil /> Edit
+                      </DropdownMenuItem>
+                    ) : null}
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
                       onSelect={() => setConfirmDeleteId(message.id)}
@@ -642,7 +649,28 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
               ) : null}
             </p>
           </div>
+
+          {/* Members of the active room — the roster never lived anywhere in
+              chat, so there was no way to see who's in a group. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground"
+            disabled={!activeRoom}
+            onClick={() => setMembersOpen(true)}
+            aria-label="View room members"
+          >
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Members</span>
+          </Button>
         </div>
+
+        <RoomMembersSheet
+          room={activeRoom}
+          currentUser={currentUser}
+          open={membersOpen}
+          onOpenChange={setMembersOpen}
+        />
 
         {/* The scroller is absolutely positioned inside a `flex-1` box, so its
             height comes from the panel and never from its own content. That

@@ -2,7 +2,6 @@ import {
   collection,
   collectionGroup,
   doc,
-  documentId,
   getDoc,
   getDocs,
   increment,
@@ -141,7 +140,7 @@ export async function toggleLike(
       transaction.update(postRef, { likeCount: increment(-1) });
       return false;
     }
-    transaction.set(likeRef, { likedAt: nowIso() });
+    transaction.set(likeRef, { userId, likedAt: nowIso() });
     transaction.update(postRef, { likeCount: increment(1) });
     return true;
   });
@@ -173,6 +172,7 @@ export async function addComment(
   batch.set(commentRef, {
     authorId: author.id,
     authorUsername: author.username,
+    authorName: author.name,
     authorPhoto: author.profilePhotoUrl,
     text,
     parentId: parentId ?? null,
@@ -245,12 +245,10 @@ export async function incrementViewCount(
 /**
  * Which of `postIds` the user has liked.
  *
- * Uses one collection-group query across every `posts/{id}/likes` subcollection
- * instead of a separate query per post. The old version issued 30 round trips
- * per feed load and re-ran on every snapshot.
- *
- * The like document id IS the user id, which is what makes `documentId()`
- * usable as the filter here.
+ * Filters on the `userId` FIELD: in a collection-group `documentId()` is the
+ * full path, so matching it against a bare uid throws. New likes store
+ * `userId`; legacy likes (uid as id only) fall back to direct per-post reads
+ * (`hasLiked` — 1 read each, rules already allow it).
  */
 export async function getLikedPostIds(
   postIds: string[],
@@ -259,20 +257,68 @@ export async function getLikedPostIds(
   const liked = new Set<string>();
   if (postIds.length === 0) return liked;
 
-  const snap = await getDocs(
-    query(collectionGroup(db, "likes"), where(documentId(), "==", userId))
-  );
+  // Non-fatal: if this query fails (rules/offline/index), the legacy per-doc
+  // probes below still answer — a throw here used to reject the whole call
+  // and make every like look like it never saved.
+  try {
+    const snap = await getDocs(
+      query(collectionGroup(db, "likes"), where("userId", "==", userId))
+    );
 
-  const wanted = new Set(postIds);
-  snap.forEach((d) => {
-    // posts/{postId}/likes/{userId} — two parents up is the post document.
-    const postId = d.ref.parent.parent?.id;
-    if (postId && wanted.has(postId)) liked.add(postId);
-  });
+    const wanted = new Set(postIds);
+    snap.forEach((d) => {
+      // posts/{postId}/likes/{userId} — two parents up is the post document.
+      const postId = d.ref.parent.parent?.id;
+      if (postId && wanted.has(postId)) liked.add(postId);
+    });
+  } catch (error) {
+    console.error("likes collection-group query failed:", error);
+  }
+
+  // Legacy fallback for likes written before `userId` was stored.
+  const missing = postIds.filter((id) => !liked.has(id));
+  if (missing.length > 0) {
+    try {
+      const checks = await Promise.all(
+        missing.map(async (postId) => ({
+          postId,
+          exists: await hasLiked(postId, userId),
+        }))
+      );
+      checks.forEach(({ postId, exists }) => {
+        if (exists) liked.add(postId);
+      });
+    } catch (error) {
+      console.error("Legacy like sweep failed:", error);
+    }
+  }
 
   return liked;
 }
 
 export function getPostRef(postId: string) {
   return doc(db, "posts", postId);
+}
+
+/**
+ * Live single post, for the shareable `/post?id=` detail page.
+ *
+ * Emits `null` when the post is deleted so the page can show "not available".
+ */
+export function subscribeToPost(
+  postId: string,
+  callback: (post: Post | null) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, "posts", postId),
+    (snap) => {
+      if (!snap.exists()) {
+        callback(null);
+        return;
+      }
+      callback(postMapper(snap.id, snap.data() as Record<string, unknown>, snap));
+    },
+    (error) => onError?.(error as Error)
+  );
 }

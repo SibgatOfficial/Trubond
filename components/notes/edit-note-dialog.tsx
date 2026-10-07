@@ -78,9 +78,13 @@ export function EditNoteDialog({
       };
 
       await updateNote(note.id, patch);
-      onSaved?.(patch);
-      toast.success("Note updated");
+      // Close FIRST, then let the parent re-render past the 200ms exit
+      // animation: updating the list while the dialog (and its Select
+      // portals) are still open races Radix's close cleanup and leaves
+      // `body { pointer-events: none }` stuck — frozen page until reload.
       onOpenChange(false);
+      window.setTimeout(() => onSaved?.(patch), 250);
+      toast.success("Note updated");
     } catch (error) {
       console.error(error);
       toast.error(

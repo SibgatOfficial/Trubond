@@ -98,7 +98,15 @@ export function NoteCard({
         </UserLink>
 
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-semibold leading-tight">{note.title}</h3>
+          {/* Uploader's real name is the primary line; old notes without
+              `uploaderName` fall back to the handle. The note TITLE is
+              deliberately not in the header — it confused people into thinking
+              it was the author's name — it renders as the body's first line. */}
+          <h3 className="truncate font-semibold leading-tight">
+            <UserLink userId={note.uploaderId}>
+              {note.uploaderName || note.uploaderUsername}
+            </UserLink>
+          </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
             <UserLink userId={note.uploaderId}>
               @{note.uploaderUsername}
@@ -120,8 +128,11 @@ export function NoteCard({
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
+            {/* non-modal: a modal menu would set `body { pointer-events: none }`,
+                and the delete dialog opened from it would inherit + restore that
+                stale lock — freezing the page until reload. */}
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit(note)}>
+              <DropdownMenuItem onSelect={() => onEdit(note)}>
                 <Pencil /> Edit details
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -137,6 +148,11 @@ export function NoteCard({
       </CardHeader>
 
       <CardContent className="space-y-3">
+        {/* The note's own title, restyled as content rather than as the
+            card header (which belongs to the author). */}
+        <h4 className="text-sm font-semibold leading-snug text-foreground">
+          {note.title}
+        </h4>
         <div className="flex flex-wrap items-center gap-1.5">
           {note.subject ? (
             <Badge variant="secondary">{note.subject}</Badge>

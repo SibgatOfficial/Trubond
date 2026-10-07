@@ -5,6 +5,7 @@ import { AuthProvider } from "@/context/auth-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { BodyLockGuard } from "@/components/shared/body-lock-guard";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 
 const inter = Inter({
@@ -63,6 +64,7 @@ export default function RootLayout({
       className={`${inter.variable} ${poppins.variable}`}
     >
       <body>
+        <BodyLockGuard />
         <ThemeProvider>
           <TooltipProvider delayDuration={300}>
             <AuthProvider>{children}</AuthProvider>

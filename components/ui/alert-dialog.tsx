@@ -28,20 +28,6 @@ const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
 >(({ className, ...props }, ref) => {
-  // Safety net for the success-path freeze: if a parent (e.g. PostCard)
-  // unmounts this dialog while it is still open — because onDeleted removed
-  // the card before Radix ran its close cleanup — the body is left with
-  // `pointer-events: none` and the whole page stops responding to clicks.
-  // Resetting on unmount guarantees no dialog can ever freeze the page,
-  // no matter what order a future handler closes/removes in.
-  React.useEffect(() => {
-    return () => {
-      if (typeof document !== "undefined") {
-        document.body.style.pointerEvents = "";
-      }
-    };
-  }, []);
-
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />

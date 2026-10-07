@@ -112,6 +112,21 @@ export default function OnboardingPage() {
     }
   };
 
+  // No form flash: the redirect effect above only runs AFTER the first paint,
+  // so an existing user (profile already set) — or anyone still resolving
+  // auth — would see "Create your profile" for a frame. While we know who they
+  // are but haven't redirected yet, show a neutral spinner instead.
+  // (Placed after every hook — early returns above a useEffect trip
+  // react-hooks/rules-of-hooks.)
+  if (loading || (user && profile)) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden="true" />
+        <p className="text-sm text-muted-foreground">Loading Trubond…</p>
+      </main>
+    );
+  }
+
   return (
     <main className="relative min-h-screen bg-background px-4 py-10">
       <div className="absolute right-4 top-4 z-20">

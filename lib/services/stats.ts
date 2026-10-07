@@ -26,6 +26,10 @@ export interface PlatformStats {
 export async function getUserActivityCounts(uid: string): Promise<{
   notes: number | null;
   projects: number | null;
+  /** Projects this user created (owns). */
+  ownedProjects: number | null;
+  /** Events this user created (organised). */
+  createdEvents: number | null;
 }> {
   const count = async (q: Parameters<typeof getCountFromServer>[0]) => {
     try {
@@ -37,14 +41,16 @@ export async function getUserActivityCounts(uid: string): Promise<{
     }
   };
 
-  const [notes, projects] = await Promise.all([
+  const [notes, projects, ownedProjects, createdEvents] = await Promise.all([
     count(query(collection(db, "notes"), where("uploaderId", "==", uid))),
     count(
       query(collection(db, "projects"), where("members", "array-contains", uid))
     ),
+    count(query(collection(db, "projects"), where("ownerId", "==", uid))),
+    count(query(collection(db, "events"), where("createdBy", "==", uid))),
   ]);
 
-  return { notes, projects };
+  return { notes, projects, ownedProjects, createdEvents };
 }
 
 const COLLECTIONS = [

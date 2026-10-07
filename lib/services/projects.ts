@@ -82,6 +82,55 @@ export function subscribeToUserProjects(
   });
 }
 
+/**
+ * Projects the user created (owns). Single-field query — no composite index.
+ *
+ * Old projects predating the phone→Google auth migration still carry the
+ * owner's OLD uid, so callers must ALSO match `ownerUsername` client-side
+ * (see `isOwnedBy` in lib/utils). That username fallback sweep is handled by
+ * `getOwnedProjectIdsByUsername`; this listener covers the uid case live.
+ */
+export function subscribeToOwnedProjects(
+  userId: string,
+  callback: (projects: Project[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, "projects"),
+    where("ownerId", "==", userId),
+    limit(PAGE_SIZE.projects)
+  );
+  return onSnapshot(q, (snap) => {
+    callback(
+      snap.docs.map((d) => projectMapper(d.id, d.data() as Record<string, unknown>, d))
+    );
+  });
+}
+
+/**
+ * One-shot fetch of projects owned under a legacy username.
+ *
+ * After the phone→Google migration a user has a NEW uid, but their old
+ * projects still store the old uid in `ownerId` — with the same username in
+ * `ownerUsername`. Usernames survive the migration, so this fills the gap the
+ * live `ownerId` listener cannot see.
+ */
+export async function getOwnedProjectsByUsername(
+  username: string
+): Promise<Project[]> {
+  const clean = username.trim().toLowerCase();
+  if (!clean) return [];
+  const snap = await getDocs(
+    query(
+      collection(db, "projects"),
+      where("ownerUsername", "==", username),
+      limit(PAGE_SIZE.projects)
+    )
+  );
+  return snap.docs.map((d) =>
+    projectMapper(d.id, d.data() as Record<string, unknown>, d)
+  );
+}
+
 export async function createProject(
   owner: UserProfile,
   input: NewProjectInput

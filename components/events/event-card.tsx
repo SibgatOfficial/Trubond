@@ -148,8 +148,10 @@ export function EventCard({
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
+                {/* non-modal so the delete/edit dialogs opened from here never
+                    inherit a stale `body { pointer-events: none }` lock. */}
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => onEdit(event)}>
+                  <DropdownMenuItem onSelect={() => onEdit(event)}>
                     <Pencil /> Edit event
                   </DropdownMenuItem>
                   <DropdownMenuItem

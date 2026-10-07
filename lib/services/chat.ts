@@ -25,6 +25,7 @@ import {
   type DocMapper,
 } from "@/lib/services/pagination";
 import type { ChatMessage, ChatRoom, ChatType, MessageReply, UserProfile } from "@/types";
+import { getUsersByIds } from "@/lib/services/users";
 
 const nowIso = () => new Date().toISOString();
 
@@ -347,6 +348,69 @@ export async function getChatRooms(user: UserProfile): Promise<ChatRoom[]> {
   }
 
   return rooms;
+}
+
+/**
+ * Who's in a room — powers the Members sheet in the chat header.
+ *
+ * Every branch is bounded (no unbounded `users` scans): project rosters come
+ * from the `members` array, DMs have exactly two participants, and the
+ * branch/global lists are hard-capped so one open can't pull the whole campus.
+ * Returns [] on any failure so the sheet can still render "no members".
+ */
+const MEMBERS_LIMIT = 50;
+
+function toProfiles(docs: QueryDocumentSnapshot[]): UserProfile[] {
+  return docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<UserProfile, "id">),
+  }));
+}
+
+export async function getRoomMembers(
+  room: ChatRoom,
+  currentUser: UserProfile
+): Promise<UserProfile[]> {
+  try {
+    switch (room.type) {
+      case "project": {
+        const snap = await getDoc(doc(db, "projects", room.id));
+        const ids = ((snap.data()?.members as string[] | undefined) ?? []).slice(
+          0,
+          MEMBERS_LIMIT
+        );
+        return await getUsersByIds(ids);
+      }
+      case "dm": {
+        const snap = await getDoc(doc(db, "dm_threads", room.id));
+        const ids = (snap.data()?.participantIds as string[] | undefined) ?? [];
+        const unique = Array.from(
+          new Set([currentUser.id, ...ids])
+        ).slice(0, MEMBERS_LIMIT);
+        return await getUsersByIds(unique);
+      }
+      case "branch": {
+        const snap = await getDocs(
+          query(
+            collection(db, "users"),
+            where("branch", "==", room.id),
+            limit(MEMBERS_LIMIT)
+          )
+        );
+        return toProfiles(snap.docs);
+      }
+      case "global":
+      default: {
+        const snap = await getDocs(
+          query(collection(db, "users"), limit(MEMBERS_LIMIT))
+        );
+        return toProfiles(snap.docs);
+      }
+    }
+  } catch (error) {
+    console.error("getRoomMembers", error);
+    return [];
+  }
 }
 
 /**
