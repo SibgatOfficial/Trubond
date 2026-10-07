@@ -187,7 +187,7 @@ export function CreateEventDialog({
               }}
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              Optional. Shown as the event's banner.
+              Optional. Shown as the event&apos;s banner.
             </p>
           </div>
 

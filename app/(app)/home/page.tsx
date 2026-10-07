@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { LoadMore } from "@/components/shared/load-more";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { SkeletonCard } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   fetchOlderPosts,
@@ -248,13 +248,13 @@ export default function HomePage() {
       {loading ? (
         <div className="space-y-4">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-48 w-full rounded-xl" />
+            <SkeletonCard key={i} media={i === 1} />
           ))}
         </div>
       ) : tab === "following" && !followingLoaded ? (
         <div className="space-y-4">
           {[0, 1].map((i) => (
-            <Skeleton key={i} className="h-48 w-full rounded-xl" />
+            <SkeletonCard key={i} media={i === 1} />
           ))}
         </div>
       ) : visiblePosts.length === 0 ? (

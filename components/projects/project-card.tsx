@@ -88,7 +88,7 @@ export function ProjectCard({
   };
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden animate-item-in">
       {/* A project without a cover still gets a deterministic brand gradient, so
           the grid looks intentional rather than half-finished. */}
       {project.coverPhotoUrl ? (

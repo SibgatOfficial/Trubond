@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   CalendarDays,
+  ChevronDown,
   Download,
   FileText,
   FolderKanban,
@@ -50,20 +51,44 @@ const ICONS: Record<string, LucideIcon> = {
   account_circle: UserCircle,
 };
 
+/** Solid brand tile — the shell's signature mark (splash + header). */
+function BrandTile({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-wash text-white shadow-soft",
+        className
+      )}
+    >
+      <GraduationCap className="h-[18px] w-[18px]" />
+    </span>
+  );
+}
+
 function LoadingSplash() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30">
-        <GraduationCap className="h-7 w-7" />
+    <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-background px-4">
+      <BrandTile className="h-14 w-14 rounded-2xl [&>svg]:h-7 [&>svg]:w-7" />
+      <div className="text-center">
+        <p className="font-display text-xl font-bold tracking-tight">
+          {APP_NAME}
+        </p>
+        <p className="mt-0.5 text-xs font-medium text-muted-foreground">
+          Loading your campus…
+        </p>
       </div>
       {/* Brand loading animation — the dots also act as the progress hint. */}
-      <LoadingAnimation className="h-14 w-24" />
-      <p className="text-sm text-muted-foreground">Loading {APP_NAME}…</p>
+      <LoadingAnimation className="h-10 w-20" />
     </div>
   );
 }
 
-/** Shared sidebar/bottom-bar link with a subtle hover motion. */
+/**
+ * Sidebar / bottom-bar link.
+ *
+ * The active state is solid brand colour — one strong moment in the shell, so
+ * the current location always reads first. Everything else stays neutral.
+ */
 function NavLink({
   href,
   label,
@@ -88,19 +113,14 @@ function NavLink({
       title={collapsed ? label : undefined}
       aria-label={collapsed ? label : undefined}
       className={cn(
-        "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
-        collapsed && "justify-center px-2",
+        "group flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors duration-150",
+        collapsed && "justify-center px-0",
         active
-          ? "bg-primary text-primary-foreground shadow-sm shadow-primary/25"
+          ? "bg-primary text-primary-foreground shadow-sm"
           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       )}
     >
-      <Icon
-        className={cn(
-          "h-5 w-5 shrink-0 transition-transform duration-200",
-          !active && "group-hover:scale-110"
-        )}
-      />
+      <Icon className="h-[18px] w-[18px] shrink-0" />
       {!collapsed && <span className="truncate">{label}</span>}
     </Link>
   );
@@ -163,21 +183,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b bg-card/80 backdrop-blur-md supports-[backdrop-filter]:bg-card/65">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
+      {/* ---------- Top bar ------------------------------------------- */}
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-card/75 backdrop-blur-xl supports-[backdrop-filter]:bg-card/60">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
           <Link
             href="/home"
-            className="flex items-center gap-2 transition-opacity hover:opacity-90"
+            className="group flex shrink-0 items-center gap-2.5"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/30">
-              <GraduationCap className="h-5 w-5" />
-            </span>
-            <span className="font-display text-xl font-bold text-primary">
+            <BrandTile className="transition-transform duration-200 group-hover:scale-105" />
+            <span className="font-display text-lg font-bold tracking-tight text-foreground">
               {APP_NAME}
             </span>
           </Link>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 items-center gap-1">
             <CommandPalette />
 
             {/* Only rendered when the browser has actually offered an install
@@ -186,7 +205,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="gap-1.5"
+                className="hidden gap-1.5 rounded-full text-muted-foreground hover:text-foreground lg:inline-flex"
                 onClick={() => {
                   void promptInstall();
                 }}
@@ -198,16 +217,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Button>
             )}
 
-            <ThemeToggle />
+            <ThemeToggle className="rounded-full" />
             <NotificationBell />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="flex items-center gap-2 rounded-full border p-1 pr-3 transition-colors hover:bg-accent"
+                  className="ml-0.5 flex h-10 shrink-0 items-center gap-2 rounded-full border border-border/70 pl-0.5 pr-1 transition-colors hover:bg-accent sm:pr-3"
                   aria-label="Account menu"
                 >
-                  <Avatar className="h-8 w-8">
+                  <Avatar className="h-9 w-9">
                     <AvatarImage
                       src={profile.profilePhotoUrl || DEFAULT_AVATAR}
                       alt={profile.name}
@@ -216,9 +235,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       {initials(profile.name || profile.username)}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="hidden text-sm font-semibold sm:inline">
+                  <span className="hidden max-w-36 truncate text-sm font-semibold sm:inline">
                     {profile.name || profile.username}
                   </span>
+                  <ChevronDown className="hidden h-3.5 w-3.5 shrink-0 text-muted-foreground sm:block" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -250,23 +270,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-6xl gap-4 px-3 py-4 sm:gap-6 sm:px-4 sm:py-6">
+      {/* One container governs the whole shell: header and body gutters align
+          exactly (pixel-perfect brand-to-sidebar edge). 8px rhythm throughout. */}
+      <div className="mx-auto flex max-w-7xl gap-6 px-4 pb-24 pt-6 sm:px-6 md:pb-10">
         <aside
           className={cn(
-            "sticky top-24 hidden h-fit shrink-0 transition-[width] duration-200 md:block",
-            collapsed ? "w-16" : "w-60"
+            "sticky top-[5.5rem] hidden max-h-[calc(100dvh-7rem)] shrink-0 flex-col overflow-y-auto px-1 transition-[width] duration-200 scrollbar-thin md:flex",
+            collapsed ? "w-[4.5rem]" : "w-60"
           )}
         >
           <div
             className={cn(
-              "mb-2 flex",
+              "mb-3 flex",
               collapsed ? "justify-center" : "justify-end"
             )}
           >
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground"
+              className="h-8 w-8 rounded-lg text-muted-foreground"
               onClick={toggleSidebar}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -278,6 +300,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </Button>
           </div>
+
+          {!collapsed && (
+            <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+              Menu
+            </p>
+          )}
 
           <nav className="flex flex-col gap-1">
             {NAV_ITEMS.map((item) => (
@@ -292,7 +320,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
-          <div className="my-3 h-px bg-border" />
+          <div className="my-3 h-px shrink-0 bg-border" />
 
           <nav className="flex flex-col gap-1">
             <NavLink
@@ -308,39 +336,64 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               title={collapsed ? "Sign out" : undefined}
               aria-label={collapsed ? "Sign out" : undefined}
               className={cn(
-                "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive",
-                collapsed && "justify-center px-2"
+                "group flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-destructive/10 hover:text-destructive",
+                collapsed && "justify-center px-0"
               )}
             >
-              <LogOut className="h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+              <LogOut className="h-[18px] w-[18px] shrink-0" />
               {!collapsed && <span className="truncate">Sign out</span>}
             </button>
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 pb-20 md:pb-6">{children}</main>
+        <main className="min-w-0 flex-1">{children}</main>
       </div>
 
-      {/* Horizontally scrollable so seven items never squash on a narrow phone. */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex overflow-x-auto border-t bg-card/95 backdrop-blur-md scrollbar-thin md:hidden">
-        {NAV_ITEMS.map((item) => {
-          const Icon = ICONS[item.icon] ?? Home;
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex min-w-[3.75rem] flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors",
-                active ? "text-primary" : "text-muted-foreground"
-              )}
-            >
-              <Icon className="h-5 w-5" />
-              {item.label}
-            </Link>
-          );
-        })}
+      {/* Mobile bottom nav — an N-column grid (N = NAV_ITEMS.length), so items
+          never squash into an overflow-scroll strip. pb respects notches. */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-card/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+        aria-label="Primary"
+      >
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: `repeat(${NAV_ITEMS.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {NAV_ITEMS.map((item) => {
+            const Icon = ICONS[item.icon] ?? Home;
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                title={item.label}
+                className="group flex min-w-0 flex-col items-center gap-1 px-0.5 pb-2 pt-2"
+              >
+                <span
+                  className={cn(
+                    "flex h-7 w-11 items-center justify-center rounded-full transition-colors duration-150",
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground group-hover:bg-accent"
+                  )}
+                >
+                  <Icon className="h-[18px] w-[18px]" />
+                </span>
+                <span
+                  className={cn(
+                    "w-full truncate text-center text-[11px] font-medium leading-tight",
+                    active ? "text-foreground" : "text-muted-foreground"
+                  )}
+                >
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </div>
   );

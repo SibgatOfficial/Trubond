@@ -12,7 +12,7 @@ import { EventAttendeesDialog } from "@/components/events/event-attendees-dialog
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { SkeletonCard } from "@/components/ui/skeleton";
 import {
   fetchOlderEvents,
   getJoinedEventIds,
@@ -171,7 +171,7 @@ export default function EventsPage() {
       {loading ? (
         <div className="space-y-4">
           {[0, 1].map((i) => (
-            <Skeleton key={i} className="h-44 w-full rounded-xl" />
+            <SkeletonCard key={i} media />
           ))}
         </div>
       ) : events.length === 0 ? (

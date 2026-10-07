@@ -106,7 +106,7 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative"
+          className="relative rounded-full"
           aria-label={
             unreadIds.length > 0
               ? `Notifications, ${unreadIds.length} unread`

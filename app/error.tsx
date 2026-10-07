@@ -26,9 +26,14 @@ export default function AppError({
   }, [error]);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-4 text-center">
-      <EmptyAnimation className="h-40 w-40" />
-      <h1 className="font-display text-2xl font-bold">Something went wrong</h1>
+    <main
+      role="alert"
+      className="flex min-h-screen animate-fade-in flex-col items-center justify-center gap-4 bg-background px-4 text-center"
+    >
+      <EmptyAnimation className="h-36 w-36" />
+      <h1 className="font-display text-2xl font-bold tracking-tight">
+        Something went wrong
+      </h1>
       <p className="max-w-md text-sm text-muted-foreground">
         {error.message || "An unexpected error occurred while loading this page."}
       </p>

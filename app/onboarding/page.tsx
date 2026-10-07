@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { GraduationCap, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/auth-provider";
 import { createUserProfile, isUsernameAvailable } from "@/lib/services/users";
 import { uploadProfilePhoto, compressImage } from "@/lib/services/storage";
@@ -135,18 +135,24 @@ export default function OnboardingPage() {
 
       <div className="mx-auto max-w-2xl animate-fade-in">
         <div className="mb-6 text-center">
-          <h1 className="font-display text-3xl font-bold text-primary">
+          <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-wash text-white shadow-soft">
+            <GraduationCap className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             Create your profile
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             Welcome to Trubond! Let&apos;s get you set up.
           </p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="rounded-2xl border bg-card p-6 shadow-xl shadow-black/5 dark:shadow-black/40 sm:p-8"
+          className="rounded-xl border bg-card p-6 shadow-soft sm:p-8"
         >
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Identity
+          </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <Label htmlFor="username">Username *</Label>

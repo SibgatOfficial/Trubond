@@ -24,7 +24,7 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center rounded-xl border border-dashed bg-card/50 px-6 py-12 text-center",
+        "flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-card/60 px-6 py-14 text-center",
         className
       )}
     >
@@ -33,14 +33,16 @@ export function EmptyState({
           <EmptyAnimation className="h-36 w-36" />
         </div>
       ) : Icon ? (
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-soft text-primary">
           <Icon className="h-6 w-6" />
         </div>
       ) : null}
 
-      <p className="font-semibold">{title}</p>
+      <p className="font-display text-[15px] font-semibold tracking-tight">
+        {title}
+      </p>
       {description && (
-        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+        <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground">
           {description}
         </p>
       )}

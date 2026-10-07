@@ -84,12 +84,19 @@ export default function LoginPage() {
       </div>
 
       {/* Brand panel — desktop only */}
-      <section className="relative hidden overflow-hidden bg-gradient-to-br from-primary to-primary/75 p-12 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
-        <div className="pointer-events-none absolute -right-20 top-1/4 h-72 w-72 rounded-full bg-primary-foreground/10 blur-3xl" />
-        <div className="pointer-events-none absolute -left-16 bottom-10 h-64 w-64 rounded-full bg-primary-foreground/10 blur-3xl" />
+      <section className="relative hidden overflow-hidden bg-primary p-12 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
+        {/* One restrained highlight, not a pair of floating blobs. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(60rem 40rem at 110% -10%, rgb(255 255 255 / 0.14), transparent 60%)",
+          }}
+        />
 
         <div className="relative flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-foreground/15 backdrop-blur">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-foreground/15 backdrop-blur">
             <GraduationCap className="h-6 w-6" />
           </span>
           <span className="font-display text-2xl font-bold">{APP_NAME}</span>
@@ -97,10 +104,12 @@ export default function LoginPage() {
 
         <div className="relative max-w-md space-y-8">
           <div>
-            <h1 className="font-display text-4xl font-bold leading-tight">
-              Your campus, connected.
+            <h1 className="font-display text-4xl font-bold leading-[1.15] tracking-tight">
+              Your campus,
+              <br />
+              connected.
             </h1>
-            <p className="mt-3 text-base text-primary-foreground/80">
+            <p className="mt-4 max-w-sm text-base leading-relaxed text-primary-foreground/80">
               {APP_TAGLINE} — feeds, notes, projects, events and real-time chat
               in one place.
             </p>
@@ -109,7 +118,7 @@ export default function LoginPage() {
           <ul className="space-y-5">
             {HIGHLIGHTS.map((item) => (
               <li key={item.title} className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15">
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/15">
                   <item.icon className="h-4 w-4" />
                 </span>
                 <div>
@@ -132,17 +141,17 @@ export default function LoginPage() {
       <section className="flex items-center justify-center px-4 py-14">
         <div className="w-full max-w-md animate-fade-in">
           <div className="mb-8 text-center lg:hidden">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30">
-              <GraduationCap className="h-8 w-8" />
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-wash text-white shadow-soft">
+              <GraduationCap className="h-7 w-7" />
             </div>
-            <h1 className="font-display text-3xl font-bold text-foreground">
+            <h1 className="font-display text-2xl font-bold text-foreground">
               {APP_NAME}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">{APP_TAGLINE}</p>
           </div>
 
-          <div className="rounded-2xl border bg-card p-8 shadow-xl shadow-black/5 dark:shadow-black/40">
-            <h2 className="text-center text-xl font-semibold text-card-foreground">
+          <div className="rounded-xl border bg-card p-6 shadow-soft sm:p-8">
+            <h2 className="text-center font-display text-xl font-semibold tracking-tight text-card-foreground">
               Welcome back
             </h2>
             <p className="mt-1 text-center text-sm text-muted-foreground">
@@ -164,7 +173,9 @@ export default function LoginPage() {
               {submitting ? "Signing in…" : "Continue with Google"}
             </Button>
 
-            <div className="mt-6 grid grid-cols-3 gap-3 text-center text-xs text-muted-foreground">
+            {/* Only needed where the brand panel (with the full highlights)
+                isn't visible — otherwise it just repeats the left side. */}
+            <div className="mt-6 grid grid-cols-3 gap-3 text-center text-xs text-muted-foreground lg:hidden">
               {HIGHLIGHTS.map((item) => (
                 <div key={item.title} className="rounded-lg bg-muted/60 p-3">
                   <item.icon className="mx-auto mb-1 h-4 w-4 text-primary" />

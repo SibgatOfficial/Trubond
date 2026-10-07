@@ -167,7 +167,7 @@ export function CreateProjectDialog({
               }}
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              Optional. Shown as the project's banner.
+              Optional. Shown as the project&apos;s banner.
             </p>
           </div>
 

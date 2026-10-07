@@ -175,11 +175,11 @@ export function CommandPalette() {
         size="sm"
         onClick={() => setOpen(true)}
         aria-label="Search Trubond (Ctrl+K)"
-        className="h-9 gap-2 px-2 text-muted-foreground sm:w-52 sm:justify-start sm:px-3"
+        className="h-9 gap-2 rounded-full px-2.5 text-muted-foreground hover:border-primary/30 hover:text-foreground sm:w-56 sm:justify-start sm:px-3"
       >
         <Search className="h-4 w-4" />
         <span className="hidden sm:inline">Search…</span>
-        <kbd className="ml-auto hidden rounded border bg-muted px-1.5 font-mono text-[10px] sm:inline">
+        <kbd className="ml-auto hidden rounded-md border border-border/70 bg-background/70 px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground sm:inline-flex">
           Ctrl K
         </kbd>
       </Button>

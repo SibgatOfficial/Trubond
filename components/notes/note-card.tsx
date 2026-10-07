@@ -86,7 +86,7 @@ export function NoteCard({
   };
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden animate-item-in">
       <CardHeader className="flex-row items-start gap-3 space-y-0">
         <UserLink userId={note.uploaderId} stopPropagation={false}>
           <PresenceAvatar

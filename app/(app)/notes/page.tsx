@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { SkeletonCard } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -270,7 +270,7 @@ export default function NotesPage() {
       {loading ? (
         <div className="space-y-4">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-44 w-full rounded-xl" />
+            <SkeletonCard key={i} lines={2} />
           ))}
         </div>
       ) : visible.length === 0 ? (

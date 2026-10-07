@@ -4,8 +4,9 @@
 
 @layer base {
   :root {
-    --background: 220 14% 96%;
-    --foreground: 222 47% 11%;
+    /* --- Surfaces: cool neutral canvas ------------------------------- */
+    --background: 220 20% 97%; /* #f6f7fb */
+    --foreground: 222 47% 11%; /* #0f172a */
 
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
@@ -13,63 +14,109 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    /* Trubond brand blue (#1d4ed8) */
+    /* --- Brand: Trubond blue (#1d4ed8) ------------------------------- */
     --primary: 224 76% 48%;
-    --primary-foreground: 210 40% 98%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 94%;
+    --secondary: 220 16% 94%;
     --secondary-foreground: 222 47% 11%;
 
-    --muted: 220 14% 94%;
+    --muted: 220 16% 94%;
     --muted-foreground: 220 9% 46%;
 
-    --accent: 224 100% 97%;
+    --accent: 226 100% 97%;
     --accent-foreground: 224 76% 40%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
 
     --success: 158 64% 40%;
-    --success-foreground: 210 40% 98%;
+    --success-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
+    --border: 220 16% 91%;
+    --input: 220 16% 91%;
     --ring: 224 76% 48%;
 
+    /* Radius scale: sm 6px · md 8px · lg/xl 12px · 2xl 16px */
     --radius: 0.75rem;
+
+    /* --- Elevation: layered, soft ------------------------------------ */
+    --shadow-soft: 0 1px 2px 0 rgb(15 23 42 / 0.04),
+      0 4px 12px -2px rgb(15 23 42 / 0.06);
+    --shadow-raised: 0 2px 4px -2px rgb(15 23 42 / 0.06),
+      0 16px 40px -12px rgb(15 23 42 / 0.18);
+    /* Reserved for the brand mark only — never on nav, buttons or cards. */
+    --shadow-glow: 0 4px 14px -2px rgb(37 99 235 / 0.45);
+
+    /* --- Motion: one easing curve for the whole product --------------- */
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --duration-fast: 150ms;
+    --duration-base: 200ms;
+    --duration-slow: 320ms;
+
+    /* --- Brand gradients: blue → indigo → violet --------------------- */
+    --gradient-brand: linear-gradient(
+      135deg,
+      #2563eb 0%,
+      #4f46e5 55%,
+      #7c3aed 100%
+    );
+    --gradient-brand-soft: linear-gradient(
+      135deg,
+      rgb(37 99 235 / 0.12),
+      rgb(124 58 237 / 0.12)
+    );
   }
 
   .dark {
-    --background: 222 47% 8%;
+    /* Deep navy canvas */
+    --background: 219 50% 5%; /* #060b14 */
     --foreground: 210 40% 98%;
 
-    --card: 222 47% 11%;
+    --card: 219 34% 9%; /* #0f1623 */
     --card-foreground: 210 40% 98%;
 
-    --popover: 222 47% 11%;
+    --popover: 219 34% 9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 224 76% 58%;
-    --primary-foreground: 222 47% 11%;
+    --primary: 224 76% 60%;
+    --primary-foreground: 222 47% 8%;
 
-    --secondary: 217 33% 17%;
+    --secondary: 217 33% 14%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217 33% 17%;
+    --muted: 217 33% 14%;
     --muted-foreground: 215 20% 65%;
 
-    --accent: 217 33% 20%;
+    --accent: 217 33% 17%;
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 63% 50%;
     --destructive-foreground: 210 40% 98%;
 
     --success: 158 64% 45%;
-    --success-foreground: 222 47% 11%;
+    --success-foreground: 219 50% 8%;
 
-    --border: 217 33% 20%;
-    --input: 217 33% 20%;
-    --ring: 224 76% 58%;
+    --border: 217 28% 16%;
+    --input: 217 28% 16%;
+    --ring: 224 76% 60%;
+
+    --shadow-soft: 0 1px 2px 0 rgb(0 0 0 / 0.4),
+      0 8px 24px -6px rgb(0 0 0 / 0.5);
+    --shadow-raised: 0 16px 48px -12px rgb(0 0 0 / 0.65);
+    --shadow-glow: 0 4px 20px -2px rgb(79 70 229 / 0.55);
+
+    --gradient-brand: linear-gradient(
+      135deg,
+      #3b82f6 0%,
+      #6366f1 55%,
+      #8b5cf6 100%
+    );
+    --gradient-brand-soft: linear-gradient(
+      135deg,
+      rgb(59 130 246 / 0.16),
+      rgb(139 92 246 / 0.16)
+    );
   }
 }
 
@@ -79,6 +126,10 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
+  }
+  ::selection {
+    background-color: hsl(var(--primary) / 0.18);
+    color: hsl(var(--foreground));
   }
 }
 

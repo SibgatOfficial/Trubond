@@ -130,7 +130,7 @@ export function PostCard({
   };
 
   return (
-    <Card ref={cardRef} className="overflow-hidden">
+    <Card ref={cardRef} className="overflow-hidden animate-item-in">
       <CardHeader className="flex-row items-center gap-3 space-y-0">
         <UserLink userId={post.authorId} stopPropagation={false}>
           <PresenceAvatar

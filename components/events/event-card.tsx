@@ -104,12 +104,12 @@ export function EventCard({
   const scanned = event.scanCount ?? 0;
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden animate-item-in">
       {event.coverPhotoUrl ? (
         <SafeImage
           src={event.coverPhotoUrl}
           alt={`${event.title} cover`}
-          className="h-36 w-full object-contain bg-muted/40"
+          className="h-36 w-full object-cover bg-muted/40"
           wrapperClassName="h-36 w-full bg-muted/40"
         />
       ) : (

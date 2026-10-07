@@ -19,7 +19,7 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ["var(--font-inter)", "Inter", "system-ui", "sans-serif"],
-        display: ["var(--font-poppins)", "Poppins", "sans-serif"],
+        display: ["var(--font-display)", "Outfit", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -62,8 +62,20 @@ const config: Config = {
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 4px)",
+        sm: "calc(var(--radius) - 6px)",
+      },
+      boxShadow: {
+        soft: "var(--shadow-soft)",
+        raised: "var(--shadow-raised)",
+        glow: "var(--shadow-glow)",
+      },
+      transitionTimingFunction: {
+        out: "var(--ease-out)",
+      },
+      backgroundImage: {
+        "brand-wash": "var(--gradient-brand)",
+        "brand-soft": "var(--gradient-brand-soft)",
       },
       keyframes: {
         "accordion-down": {
@@ -86,18 +98,19 @@ const config: Config = {
           from: { opacity: "0", transform: "scale(0.96)" },
           to: { opacity: "1", transform: "scale(1)" },
         },
-        "bounce-subtle": {
-          "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-3px)" },
+        /* Feed/list item entrance: subtle rise + fade, staggered via delay. */
+        "item-in": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "fade-in": "fade-in 0.35s ease-out both",
-        "slide-up": "slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both",
-        "scale-in": "scale-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both",
-        "bounce-subtle": "bounce-subtle 2s ease-in-out infinite",
+        "fade-in": "fade-in 0.35s var(--ease-out) both",
+        "slide-up": "slide-up 0.4s var(--ease-out) both",
+        "scale-in": "scale-in 0.25s var(--ease-out) both",
+        "item-in": "item-in 0.4s var(--ease-out) both",
       },
     },
   },
