@@ -285,10 +285,13 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
 
   const handleDeleteMessage = async () => {
     if (!activeRoom || !confirmDeleteId) return;
+    const targetId = confirmDeleteId;
+    // Close FIRST so Radix exit cleanup runs before the message list
+    // re-renders underneath.
+    setConfirmDeleteId(null);
     setDeletingMessage(true);
     try {
-      await deleteMessage(activeRoom.type, activeRoom.id, confirmDeleteId);
-      setConfirmDeleteId(null);
+      await deleteMessage(activeRoom.type, activeRoom.id, targetId);
     } catch (error) {
       console.error(error);
       toast.error("Failed to delete the message.");
@@ -887,6 +890,7 @@ export function ChatClient({ currentUser }: { currentUser: UserProfile }) {
       <ConfirmDeleteDialog
         open={confirmDeleteId !== null}
         onOpenChange={(open) => {
+          if (!open && deletingMessage) return;
           if (!open) setConfirmDeleteId(null);
         }}
         title="Delete this message?"

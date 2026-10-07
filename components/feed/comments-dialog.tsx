@@ -125,10 +125,12 @@ export function CommentsDialog({
 
   const handleDelete = async () => {
     if (!postId || !confirmDeleteId) return;
+    const targetId = confirmDeleteId;
+    // Close FIRST so Radix exit cleanup runs before the list re-renders.
+    setConfirmDeleteId(null);
     setDeleting(true);
     try {
-      await deleteComment(postId, confirmDeleteId);
-      setConfirmDeleteId(null);
+      await deleteComment(postId, targetId);
       toast.success("Comment deleted");
     } catch (error) {
       console.error(error);
@@ -261,6 +263,7 @@ export function CommentsDialog({
     <ConfirmDeleteDialog
       open={confirmDeleteId !== null}
       onOpenChange={(open) => {
+        if (!open && deleting) return;
         if (!open) setConfirmDeleteId(null);
       }}
       title="Delete this comment?"

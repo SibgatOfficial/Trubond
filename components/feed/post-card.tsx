@@ -95,17 +95,22 @@ export function PostCard({
   // a Radix dropdown unmounts its content on select, which would tear the
   // dialog down with it.
   const handleDelete = async () => {
+    const targetId = post.id;
+    const authorId = post.authorId;
+    // Close FIRST so Radix runs exit cleanup before the parent removes
+    // this card; defer onDeleted one frame so the animation can start.
+    setConfirmOpen(false);
     setBusy(true);
     try {
-      await deletePost(post.id, post.authorId);
-      onDeleted(post.id);
+      await deletePost(targetId, authorId);
+      // Defer past the 200ms Radix exit animation so body cleanup finishes.
+      window.setTimeout(() => onDeleted(targetId), 250);
       toast.success("Post deleted");
     } catch (error) {
       console.error(error);
       toast.error("Failed to delete post.");
     } finally {
       setBusy(false);
-      setConfirmOpen(false);
     }
   };
 
@@ -248,7 +253,13 @@ export function PostCard({
         </div>
       </CardContent>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          if (!open && busy) return;
+          setConfirmOpen(open);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this post?</AlertDialogTitle>

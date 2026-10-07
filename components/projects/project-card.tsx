@@ -69,12 +69,16 @@ export function ProjectCard({
   };
 
   const handleDelete = async () => {
+    const targetId = project.id;
+    // Close FIRST so Radix runs exit cleanup before the parent removes
+    // this card; defer onDeleted one frame so the animation can start.
+    setConfirmOpen(false);
     setDeleting(true);
     try {
-      await deleteProject(project.id);
-      onDeleted(project.id);
+      await deleteProject(targetId);
+      // Defer past the 200ms Radix exit animation so body cleanup finishes.
+      window.setTimeout(() => onDeleted(targetId), 250);
       toast.success("Project deleted");
-      setConfirmOpen(false);
     } catch (error) {
       console.error(error);
       toast.error("Failed to delete project.");
@@ -245,7 +249,10 @@ export function ProjectCard({
 
       <ConfirmDeleteDialog
         open={confirmOpen}
-        onOpenChange={setConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open && deleting) return;
+          setConfirmOpen(open);
+        }}
         title={`Delete "${project.title}"?`}
         description="This removes the project, its join requests and its project chat. It can't be undone."
         confirmLabel="Delete project"

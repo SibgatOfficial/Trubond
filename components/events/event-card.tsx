@@ -82,12 +82,16 @@ export function EventCard({
   };
 
   const handleDelete = async () => {
+    const targetId = event.id;
+    // Close FIRST so Radix runs exit cleanup before the parent removes
+    // this card; defer onDeleted one frame so the animation can start.
+    setConfirmOpen(false);
     setDeleting(true);
     try {
-      await deleteEvent(event.id);
-      onDeleted(event.id);
+      await deleteEvent(targetId);
+      // Defer past the 200ms Radix exit animation so body cleanup finishes.
+      window.setTimeout(() => onDeleted(targetId), 250);
       toast.success("Event deleted");
-      setConfirmOpen(false);
     } catch (error) {
       console.error(error);
       toast.error("Failed to delete event.");
@@ -267,7 +271,10 @@ export function EventCard({
 
       <ConfirmDeleteDialog
         open={confirmOpen}
-        onOpenChange={setConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open && deleting) return;
+          setConfirmOpen(open);
+        }}
         title={`Delete "${event.title}"?`}
         description={
           count > 0

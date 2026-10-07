@@ -82,6 +82,8 @@ export function NotificationBell() {
 
   const handleClearAll = async () => {
     if (!profile) return;
+    // Close FIRST so Radix exit cleanup runs before the list empties.
+    setConfirmClear(false);
     setClearing(true);
     try {
       await clearNotifications(profile.id);
@@ -93,7 +95,6 @@ export function NotificationBell() {
       toast.error("Failed to clear notifications.");
     } finally {
       setClearing(false);
-      setConfirmClear(false);
     }
   };
 
@@ -200,7 +201,10 @@ export function NotificationBell() {
 
       <ConfirmDeleteDialog
         open={confirmClear}
-        onOpenChange={setConfirmClear}
+        onOpenChange={(open) => {
+          if (!open && clearing) return;
+          setConfirmClear(open);
+        }}
         title="Clear all notifications?"
         description="This removes every notification from your list. This can't be undone."
         confirmLabel="Clear all"

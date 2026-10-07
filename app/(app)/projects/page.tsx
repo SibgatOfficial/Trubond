@@ -106,11 +106,14 @@ export default function ProjectsPage() {
 
   const handleLeaveConfirm = async () => {
     if (!leaveTarget) return;
+    const targetId = leaveTarget.id;
+    // Close FIRST so Radix runs its exit cleanup (restores body
+    // pointer-events) before the list re-renders underneath.
+    setLeaveTarget(null);
     setLeaving(true);
     try {
-      await leaveProject(leaveTarget.id, profile.id);
+      await leaveProject(targetId, profile.id);
       toast.success("You left the project.");
-      setLeaveTarget(null);
     } catch (error) {
       console.error(error);
       toast.error("Failed to leave project.");
@@ -204,6 +207,7 @@ export default function ProjectsPage() {
       <AlertDialog
         open={leaveTarget !== null}
         onOpenChange={(open) => {
+          if (!open && leaving) return;
           if (!open) setLeaveTarget(null);
         }}
       >

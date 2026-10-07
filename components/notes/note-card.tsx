@@ -64,17 +64,20 @@ export function NoteCard({
   const [previewFile, setPreviewFile] = React.useState<NoteFile | null>(null);
 
   const handleDelete = async () => {
+    const targetId = note.id;
+    // Close FIRST so Radix runs exit cleanup before the parent removes
+    // this card; defer onDeleted past the 200ms exit animation.
+    setConfirmOpen(false);
     setBusy(true);
     try {
-      await deleteNote(note.id);
-      onDeleted(note.id);
+      await deleteNote(targetId);
+      window.setTimeout(() => onDeleted(targetId), 250);
       toast.success("Note deleted");
     } catch (error) {
       console.error(error);
       toast.error("Failed to delete note.");
     } finally {
       setBusy(false);
-      setConfirmOpen(false);
     }
   };
 
@@ -205,7 +208,13 @@ export function NoteCard({
         />
       </CardContent>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          if (!open && busy) return;
+          setConfirmOpen(open);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this note?</AlertDialogTitle>
