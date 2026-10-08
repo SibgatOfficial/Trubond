@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Link2, MessageSquare, Newspaper, School } from "lucide-react";
+import { Link2, MapPin, MessageSquare, Newspaper, School, BookOpen } from "lucide-react";
 import { useAuth } from "@/context/auth-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -509,6 +509,18 @@ export function UserProfileView() {
 
           <div className="mt-4 space-y-2 text-sm">
             {user.about ? <p>{user.about}</p> : null}
+            {user.university ? (
+              <p className="flex items-center gap-1.5 text-muted-foreground">
+                <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {user.university}
+              </p>
+            ) : null}
+            {user.degree || user.major ? (
+              <p className="flex items-center gap-1.5 text-muted-foreground">
+                <BookOpen className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {[user.degree, user.major].filter(Boolean).join(" · ")}
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
               {user.branch ? (
                 <span className="flex items-center gap-1.5">

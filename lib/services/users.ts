@@ -70,6 +70,11 @@ export interface CreateProfileInput {
   about: string;
   profilePhotoUrl: string;
   branch: string;
+  /** College / university picked from the search — required at onboarding. */
+  university: string;
+  /** Optional free-text degree and major (global audience: no dropdowns). */
+  degree?: string;
+  major?: string;
   startYear: number | null;
   passingYear: number | null;
   gender: string;
@@ -95,6 +100,9 @@ export async function createUserProfile(
     about: input.about,
     profilePhotoUrl: input.profilePhotoUrl,
     branch: input.branch,
+    university: input.university,
+    degree: input.degree ?? "",
+    major: input.major ?? "",
     startYear: input.startYear ?? null,
     passingYear: input.passingYear ?? null,
     gender: input.gender,

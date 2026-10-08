@@ -18,6 +18,15 @@ export interface UserProfile {
     website?: string;
   };
   branch: string;
+  /**
+   * College / university, chosen from the onboarding search (OpenAlex
+   * autocomplete). Absent on profiles created before it existed.
+   */
+  university?: string;
+  /** Free-text degree, e.g. "B.Tech" — written by the student, not a dropdown. */
+  degree?: string;
+  /** Free-text major / field of study, e.g. "Computer Science". */
+  major?: string;
   startYear: number | null;
   passingYear: number | null;
   gender: string;

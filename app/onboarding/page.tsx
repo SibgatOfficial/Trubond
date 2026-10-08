@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { UniversitySearch } from "@/components/shared/university-search";
 import { toast } from "sonner";
 
 type UsernameState = "idle" | "checking" | "available" | "taken";
@@ -33,6 +34,9 @@ export default function OnboardingPage() {
   const [usernameState, setUsernameState] = React.useState<UsernameState>("idle");
   const [name, setName] = React.useState(user?.displayName ?? "");
   const [about, setAbout] = React.useState("");
+  const [university, setUniversity] = React.useState("");
+  const [degree, setDegree] = React.useState("");
+  const [major, setMajor] = React.useState("");
   const [branch, setBranch] = React.useState("");
   const [startYear, setStartYear] = React.useState("");
   const [passingYear, setPassingYear] = React.useState("");
@@ -77,6 +81,14 @@ export default function OnboardingPage() {
       toast.error("Please enter your full name.");
       return;
     }
+    if (!university.trim()) {
+      toast.error("Please choose your college or university from the list.");
+      return;
+    }
+    if (!passingYear) {
+      toast.error("Please enter your graduation year.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -92,6 +104,9 @@ export default function OnboardingPage() {
         email: user.email ?? "",
         about,
         profilePhotoUrl: photoURL,
+        university: university.trim(),
+        degree: degree.trim(),
+        major: major.trim(),
         branch,
         startYear: startYear ? Number(startYear) : null,
         passingYear: passingYear ? Number(passingYear) : null,
@@ -221,6 +236,40 @@ export default function OnboardingPage() {
               />
             </div>
 
+            <p className="mb-2 mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:col-span-2">
+              Education
+            </p>
+            <div className="sm:col-span-2">
+              <Label htmlFor="university">College / University *</Label>
+              <UniversitySearch
+                id="university"
+                value={university}
+                onChange={setUniversity}
+                required
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="degree">Degree</Label>
+              <Input
+                id="degree"
+                value={degree}
+                onChange={(e) => setDegree(e.target.value)}
+                placeholder="e.g. B.Tech, B.Sc, BBA"
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="major">Major / Field of Study</Label>
+              <Input
+                id="major"
+                value={major}
+                onChange={(e) => setMajor(e.target.value)}
+                placeholder="e.g. Computer Science"
+                className="mt-1.5"
+              />
+            </div>
+
             <div>
               <Label htmlFor="branch">Branch</Label>
               <Select value={branch} onValueChange={setBranch}>
@@ -263,7 +312,7 @@ export default function OnboardingPage() {
               />
             </div>
             <div>
-              <Label htmlFor="passing-year">Passing Year</Label>
+              <Label htmlFor="passing-year">Graduation Year *</Label>
               <Input
                 id="passing-year"
                 type="number"
@@ -271,6 +320,7 @@ export default function OnboardingPage() {
                 onChange={(e) => setPassingYear(e.target.value)}
                 placeholder="2027"
                 className="mt-1.5"
+                required
               />
             </div>
             <div className="sm:col-span-2">

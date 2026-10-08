@@ -25,6 +25,7 @@ import { compressImage, uploadProfilePhoto } from "@/lib/services/storage";
 import { acceptAttribute, IMAGE_UPLOAD_POLICY } from "@/lib/upload-policy";
 import { useAuth } from "@/context/auth-provider";
 import { BRANCHES } from "@/lib/constants";
+import { UniversitySearch } from "@/components/shared/university-search";
 import { DEFAULT_AVATAR } from "@/lib/utils";
 import type { UserProfile } from "@/types";
 import { toast } from "sonner";
@@ -42,6 +43,12 @@ export function EditProfileDialog({
   const [name, setName] = React.useState(profile.name);
   const [about, setAbout] = React.useState(profile.about ?? "");
   const [branch, setBranch] = React.useState(profile.branch ?? "");
+  const [university, setUniversity] = React.useState(profile.university ?? "");
+  const [degree, setDegree] = React.useState(profile.degree ?? "");
+  const [major, setMajor] = React.useState(profile.major ?? "");
+  const [passingYear, setPassingYear] = React.useState(
+    profile.passingYear ? String(profile.passingYear) : ""
+  );
   const [photoFile, setPhotoFile] = React.useState<File | null>(null);
   const [links, setLinks] = React.useState({
     linkedin: "",
@@ -56,6 +63,10 @@ export function EditProfileDialog({
       setName(profile.name);
       setAbout(profile.about ?? "");
       setBranch(profile.branch ?? "");
+      setUniversity(profile.university ?? "");
+      setDegree(profile.degree ?? "");
+      setMajor(profile.major ?? "");
+      setPassingYear(profile.passingYear ? String(profile.passingYear) : "");
       setPhotoFile(null);
       setLinks({
         linkedin: profile.socialLinks?.linkedin ?? "",
@@ -67,6 +78,14 @@ export function EditProfileDialog({
   }, [open, profile]);
 
   const handleSave = async () => {
+    if (!university.trim()) {
+      toast.error("Please choose your college or university from the list.");
+      return;
+    }
+    if (!passingYear) {
+      toast.error("Please enter your graduation year.");
+      return;
+    }
     setSaving(true);
     try {
       let profilePhotoUrl = profile.profilePhotoUrl || DEFAULT_AVATAR;
@@ -83,6 +102,10 @@ export function EditProfileDialog({
         name: name.trim(),
         about,
         branch,
+        university: university.trim(),
+        degree: degree.trim(),
+        major: major.trim(),
+        passingYear: Number(passingYear),
         profilePhotoUrl,
         socialLinks,
       });
@@ -138,6 +161,46 @@ export function EditProfileDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label htmlFor="ep-university">College / University</Label>
+            <UniversitySearch
+              id="ep-university"
+              value={university}
+              onChange={setUniversity}
+              className="mt-1.5"
+            />
+          </div>
+          <div>
+            <Label htmlFor="ep-degree">Degree</Label>
+            <Input
+              id="ep-degree"
+              placeholder="e.g. B.Tech, B.Sc, BBA"
+              value={degree}
+              onChange={(e) => setDegree(e.target.value)}
+              className="mt-1.5"
+            />
+          </div>
+          <div>
+            <Label htmlFor="ep-major">Major / Field of Study</Label>
+            <Input
+              id="ep-major"
+              placeholder="e.g. Computer Science"
+              value={major}
+              onChange={(e) => setMajor(e.target.value)}
+              className="mt-1.5"
+            />
+          </div>
+          <div>
+            <Label htmlFor="ep-passing-year">Graduation Year</Label>
+            <Input
+              id="ep-passing-year"
+              type="number"
+              placeholder="2027"
+              value={passingYear}
+              onChange={(e) => setPassingYear(e.target.value)}
+              className="mt-1.5"
+            />
           </div>
           <div className="space-y-3 border-t pt-4">
             <div>
