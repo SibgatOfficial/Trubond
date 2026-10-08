@@ -8,7 +8,7 @@ import { createUserProfile, isUsernameAvailable } from "@/lib/services/users";
 import { uploadProfilePhoto, compressImage } from "@/lib/services/storage";
 import { acceptAttribute, IMAGE_UPLOAD_POLICY } from "@/lib/upload-policy";
 import { DEFAULT_AVATAR, cn } from "@/lib/utils";
-import { BRANCHES, GENDERS } from "@/lib/constants";
+import { BRANCH_GROUPS, DEGREE_GROUPS, DEGREE_OTHER, GENDERS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,7 +16,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -36,6 +39,7 @@ export default function OnboardingPage() {
   const [about, setAbout] = React.useState("");
   const [university, setUniversity] = React.useState("");
   const [degree, setDegree] = React.useState("");
+  const [degreeCustom, setDegreeCustom] = React.useState("");
   const [major, setMajor] = React.useState("");
   const [branch, setBranch] = React.useState("");
   const [startYear, setStartYear] = React.useState("");
@@ -105,7 +109,7 @@ export default function OnboardingPage() {
         about,
         profilePhotoUrl: photoURL,
         university: university.trim(),
-        degree: degree.trim(),
+        degree: (degree === DEGREE_OTHER ? degreeCustom : degree).trim(),
         major: major.trim(),
         branch,
         startYear: startYear ? Number(startYear) : null,
@@ -251,13 +255,34 @@ export default function OnboardingPage() {
             </div>
             <div>
               <Label htmlFor="degree">Degree</Label>
-              <Input
-                id="degree"
-                value={degree}
-                onChange={(e) => setDegree(e.target.value)}
-                placeholder="e.g. B.Tech, B.Sc, BBA"
-                className="mt-1.5"
-              />
+              <Select value={degree} onValueChange={setDegree}>
+                <SelectTrigger id="degree" className="mt-1.5">
+                  <SelectValue placeholder="Select degree" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEGREE_GROUPS.map((group) => (
+                    <SelectGroup key={group.label}>
+                      <SelectLabel>{group.label}</SelectLabel>
+                      {group.degrees.map((d) => (
+                        <SelectItem key={d} value={d}>
+                          {d}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                  <SelectSeparator />
+                  <SelectItem value={DEGREE_OTHER}>{DEGREE_OTHER}</SelectItem>
+                </SelectContent>
+              </Select>
+              {degree === DEGREE_OTHER ? (
+                <Input
+                  id="degree-custom"
+                  value={degreeCustom}
+                  onChange={(e) => setDegreeCustom(e.target.value)}
+                  placeholder="Type your degree"
+                  className="mt-1.5"
+                />
+              ) : null}
             </div>
             <div>
               <Label htmlFor="major">Major / Field of Study</Label>
@@ -277,10 +302,15 @@ export default function OnboardingPage() {
                   <SelectValue placeholder="Select branch" />
                 </SelectTrigger>
                 <SelectContent>
-                  {BRANCHES.map((b) => (
-                    <SelectItem key={b.value} value={b.value}>
-                      {b.label}
-                    </SelectItem>
+                  {BRANCH_GROUPS.map((group) => (
+                    <SelectGroup key={group.label}>
+                      <SelectLabel>{group.label}</SelectLabel>
+                      {group.options.map((b) => (
+                        <SelectItem key={b.value} value={b.value}>
+                          {b.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   ))}
                 </SelectContent>
               </Select>

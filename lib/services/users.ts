@@ -72,7 +72,7 @@ export interface CreateProfileInput {
   branch: string;
   /** College / university picked from the search — required at onboarding. */
   university: string;
-  /** Optional free-text degree and major (global audience: no dropdowns). */
+  /** Optional degree (curated list + "Other") and free-text major. */
   degree?: string;
   major?: string;
   startYear: number | null;

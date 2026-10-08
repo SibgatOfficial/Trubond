@@ -23,7 +23,7 @@ export interface UserProfile {
    * autocomplete). Absent on profiles created before it existed.
    */
   university?: string;
-  /** Free-text degree, e.g. "B.Tech" — written by the student, not a dropdown. */
+  /** Degree from the curated list, or custom text when "Other" was chosen. */
   degree?: string;
   /** Free-text major / field of study, e.g. "Computer Science". */
   major?: string;

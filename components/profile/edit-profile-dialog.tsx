@@ -16,7 +16,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -24,11 +27,28 @@ import { updateUserProfile } from "@/lib/services/users";
 import { compressImage, uploadProfilePhoto } from "@/lib/services/storage";
 import { acceptAttribute, IMAGE_UPLOAD_POLICY } from "@/lib/upload-policy";
 import { useAuth } from "@/context/auth-provider";
-import { BRANCHES } from "@/lib/constants";
+import {
+  BRANCH_GROUPS,
+  DEGREES,
+  DEGREE_GROUPS,
+  DEGREE_OTHER,
+} from "@/lib/constants";
 import { UniversitySearch } from "@/components/shared/university-search";
 import { DEFAULT_AVATAR } from "@/lib/utils";
 import type { UserProfile } from "@/types";
 import { toast } from "sonner";
+
+/**
+ * Split a stored degree into [select value, custom text].
+ *
+ * A stored value that isn't in the curated list (typed before the list
+ * existed, or saved via "Other") maps to the Other option with its text.
+ */
+function splitDegree(stored: string | undefined): [string, string] {
+  const value = (stored ?? "").trim();
+  if (!value) return ["", ""];
+  return DEGREES.includes(value) ? [value, ""] : [DEGREE_OTHER, value];
+}
 
 export function EditProfileDialog({
   profile,
@@ -44,7 +64,12 @@ export function EditProfileDialog({
   const [about, setAbout] = React.useState(profile.about ?? "");
   const [branch, setBranch] = React.useState(profile.branch ?? "");
   const [university, setUniversity] = React.useState(profile.university ?? "");
-  const [degree, setDegree] = React.useState(profile.degree ?? "");
+  const [degree, setDegree] = React.useState(
+    () => splitDegree(profile.degree)[0]
+  );
+  const [degreeCustom, setDegreeCustom] = React.useState(
+    () => splitDegree(profile.degree)[1]
+  );
   const [major, setMajor] = React.useState(profile.major ?? "");
   const [passingYear, setPassingYear] = React.useState(
     profile.passingYear ? String(profile.passingYear) : ""
@@ -64,7 +89,9 @@ export function EditProfileDialog({
       setAbout(profile.about ?? "");
       setBranch(profile.branch ?? "");
       setUniversity(profile.university ?? "");
-      setDegree(profile.degree ?? "");
+      const [storedDegree, customDegree] = splitDegree(profile.degree);
+      setDegree(storedDegree);
+      setDegreeCustom(customDegree);
       setMajor(profile.major ?? "");
       setPassingYear(profile.passingYear ? String(profile.passingYear) : "");
       setPhotoFile(null);
@@ -103,7 +130,7 @@ export function EditProfileDialog({
         about,
         branch,
         university: university.trim(),
-        degree: degree.trim(),
+        degree: (degree === DEGREE_OTHER ? degreeCustom : degree).trim(),
         major: major.trim(),
         passingYear: Number(passingYear),
         profilePhotoUrl,
@@ -154,10 +181,15 @@ export function EditProfileDialog({
                 <SelectValue placeholder="Select branch" />
               </SelectTrigger>
               <SelectContent>
-                {BRANCHES.map((b) => (
-                  <SelectItem key={b.value} value={b.value}>
-                    {b.label}
-                  </SelectItem>
+                {BRANCH_GROUPS.map((group) => (
+                  <SelectGroup key={group.label}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.options.map((b) => (
+                      <SelectItem key={b.value} value={b.value}>
+                        {b.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
@@ -173,13 +205,34 @@ export function EditProfileDialog({
           </div>
           <div>
             <Label htmlFor="ep-degree">Degree</Label>
-            <Input
-              id="ep-degree"
-              placeholder="e.g. B.Tech, B.Sc, BBA"
-              value={degree}
-              onChange={(e) => setDegree(e.target.value)}
-              className="mt-1.5"
-            />
+            <Select value={degree} onValueChange={setDegree}>
+              <SelectTrigger id="ep-degree" className="mt-1.5">
+                <SelectValue placeholder="Select degree" />
+              </SelectTrigger>
+              <SelectContent>
+                {DEGREE_GROUPS.map((group) => (
+                  <SelectGroup key={group.label}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.degrees.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+                <SelectSeparator />
+                <SelectItem value={DEGREE_OTHER}>{DEGREE_OTHER}</SelectItem>
+              </SelectContent>
+            </Select>
+            {degree === DEGREE_OTHER ? (
+              <Input
+                id="ep-degree-custom"
+                placeholder="Type your degree"
+                value={degreeCustom}
+                onChange={(e) => setDegreeCustom(e.target.value)}
+                className="mt-1.5"
+              />
+            ) : null}
           </div>
           <div>
             <Label htmlFor="ep-major">Major / Field of Study</Label>
