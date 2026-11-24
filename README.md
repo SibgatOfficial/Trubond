@@ -21,7 +21,7 @@ attendance verification.
 
 **Version 2.0 is a full rewrite** of the original vanilla HTML/JS site. It now
 runs on **Next.js 15 (App Router) + TypeScript + Tailwind CSS + shadcn/ui**,
-and sign-in is **Google-only** (Phone Auth has been fully removed).
+and sign-in is **Google-only**.
 
 > 🔐 **Migrating from Phone Auth?** Read **[GOOGLE_AUTH_MIGRATION.md](./GOOGLE_AUTH_MIGRATION.md)**
 > — it explains exactly what happens to existing users, posts and chats.
