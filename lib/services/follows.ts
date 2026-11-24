@@ -14,17 +14,6 @@ import {
 import { db } from "@/lib/firebase";
 import type { UserProfile } from "@/types";
 
-/**
- * The follow graph.
- *
- * A follow is a single document at `follows/{followerId}_{followingId}`. The
- * deterministic id is what makes following idempotent: the transaction reads it
- * first, so a double-click cannot inflate either counter.
- *
- * `followingCount` / `followerCount` already existed on `UserProfile` but were
- * initialised to 0 and never written by anything — these functions are what
- * finally keep them honest.
- */
 
 const nowIso = () => new Date().toISOString();
 

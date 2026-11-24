@@ -349,17 +349,7 @@ export async function updateEvent(
   await updateDoc(doc(db, "events", eventId), input);
 }
 
-/**
- * Deletes an event *and* its attendee documents.
- *
- * Firestore has no cascade delete: leaving the `attendees` subcollection behind
- * would both orphan data and keep matching the collection-group query that works
- * out which events a user has joined — so a deleted event would still show as
- * "registered" on their profile.
- *
- * Capped at 400 attendee docs per commit, comfortably inside the 500-write
- * batch limit. An event larger than that is not a realistic campus case.
- */
+
 export async function deleteEvent(eventId: string): Promise<void> {
   const attendees = await getDocs(
     query(collection(db, "events", eventId, "attendees"), limit(400))

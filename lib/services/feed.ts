@@ -1,14 +1,6 @@
 import { toMillis } from "@/lib/utils";
 import type { Post, UserProfile } from "@/types";
 
-/**
- * Client-side feed ranking.
- *
- * There is no backend (the app is a static export) and Firestore cannot rank,
- * so the feed fetches a recent window and scores it in the browser. Every
- * weight lives in `FEED_WEIGHTS` so the ordering can be tuned in one place
- * rather than hunted through the scorer.
- */
 
 export type FeedTab = "for-you" | "latest" | "following";
 

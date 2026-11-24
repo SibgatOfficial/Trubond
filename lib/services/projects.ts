@@ -82,14 +82,7 @@ export function subscribeToUserProjects(
   });
 }
 
-/**
- * Projects the user created (owns). Single-field query — no composite index.
- *
- * Old projects predating the phone→Google auth migration still carry the
- * owner's OLD uid, so callers must ALSO match `ownerUsername` client-side
- * (see `isOwnedBy` in lib/utils). That username fallback sweep is handled by
- * `getOwnedProjectIdsByUsername`; this listener covers the uid case live.
- */
+
 export function subscribeToOwnedProjects(
   userId: string,
   callback: (projects: Project[]) => void
@@ -182,13 +175,7 @@ export async function deleteProject(projectId: string): Promise<void> {
   await batch.commit();
 }
 
-/**
- * Every project the user has a pending join request for, from ONE query.
- *
- * The projects page used to call `hasRequested` once per project (30 queries
- * for a 30-project list). `status` is filtered client-side so this needs only
- * a single-field index rather than a composite one.
- */
+
 export async function getRequestedProjectIds(
   userId: string
 ): Promise<Set<string>> {

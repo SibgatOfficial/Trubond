@@ -8,18 +8,7 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
-/**
- * Cursor pagination shared by every list in the app.
- *
- * Design note: page 1 of each feed is a realtime `onSnapshot` (so new content
- * appears instantly), and older pages are one-shot `getDocs` calls. Firestore
- * cannot keep an unbounded paginated set live, and this is the standard
- * compromise — the live listener is bounded to a single page.
- *
- * Cursors are `QueryDocumentSnapshot`s: `startAfter(doc)` is more robust than
- * passing raw field values, because it cannot skip or repeat documents that
- * share a timestamp.
- */
+
 
 export type SortDirection = "asc" | "desc";
 

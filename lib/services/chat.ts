@@ -49,18 +49,6 @@ export function chatCollectionPath(type: ChatType, roomId: string): string {
 const messageMapper: DocMapper<ChatMessage> = (id, data) =>
   ({ id, ...data }) as unknown as ChatMessage;
 
-/**
- * The newest page of a room, delivered OLDEST-first for rendering.
- *
- * Ordered DESC + `limit` so Firestore returns the newest N (an ascending query
- * can only limit from the *start* of history); the array is reversed here so
- * callers can render top-to-bottom.
- *
- * Previously this was an unbounded ascending listener — it streamed every
- * message ever sent in the room, on every client.
- *
- * `cursor` is the oldest message on this page; pass it to `fetchOlderMessages`.
- */
 export function subscribeToMessages(
   type: ChatType,
   roomId: string,
@@ -87,7 +75,7 @@ export function subscribeToMessages(
   );
 }
 
-/** Older messages, returned oldest-first so they can be prepended. */
+
 export async function fetchOlderMessages(
   type: ChatType,
   roomId: string,
@@ -129,7 +117,7 @@ export async function sendTextMessage(
   });
 }
 
-/** Edits a message's text and stamps it, so the UI can show "edited". */
+
 export async function editMessage(
   type: ChatType,
   roomId: string,
@@ -201,7 +189,7 @@ export async function createPoll(
   });
 }
 
-/** Votes using a transaction so concurrent votes can't clobber each other. */
+
 export async function votePoll(
   type: ChatType,
   roomId: string,
