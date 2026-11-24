@@ -2,16 +2,7 @@ import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 
-/**
- * Firebase is initialised once and reused across hot reloads.
- *
- * Config comes from NEXT_PUBLIC_* env vars (see `.env.local.example`). The
- * inline fallbacks point at the existing Trubond project so the app still runs
- * out of the box; prefer the env vars in real deployments.
- *
- * NOTE: Firebase Cloud Storage is no longer used — file uploads go to
- * Cloudinary via `lib/services/storage.ts`.
- */
+
 const firebaseConfig = {
   apiKey:
     process.env.NEXT_PUBLIC_FIREBASE_API_KEY ??

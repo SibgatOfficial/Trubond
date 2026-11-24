@@ -1,16 +1,6 @@
 import { collection, getCountFromServer, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-/**
- * Platform-wide document counts.
- *
- * Uses Firestore **aggregation queries** (`getCountFromServer`) rather than
- * reading the collections: a count costs roughly one read per 1,000 documents
- * instead of one per document, so this stays cheap even as the platform grows.
- *
- * Every collection counted here is `allow read: if isSignedIn()` in
- * firestore.rules, so this works from the client with no backend.
- */
 
 export interface PlatformStats {
   users: number;

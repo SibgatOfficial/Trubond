@@ -99,14 +99,7 @@ export function subscribeToOwnedProjects(
   });
 }
 
-/**
- * One-shot fetch of projects owned under a legacy username.
- *
- * After the phone→Google migration a user has a NEW uid, but their old
- * projects still store the old uid in `ownerId` — with the same username in
- * `ownerUsername`. Usernames survive the migration, so this fills the gap the
- * live `ownerId` listener cannot see.
- */
+
 export async function getOwnedProjectsByUsername(
   username: string
 ): Promise<Project[]> {

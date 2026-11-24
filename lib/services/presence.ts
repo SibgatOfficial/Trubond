@@ -12,19 +12,6 @@ import { db } from "@/lib/firebase";
 import { toMillis } from "@/lib/utils";
 import type { FirestoreDate, UserProfile } from "@/types";
 
-/**
- * Online presence, stored on the user document.
- *
- * Deliberately built on Firestore rather than the Realtime Database: RTDB is
- * Firebase's usual recommendation for presence, but enabling it would add a
- * second product (and another billing surface) for a single boolean. A
- * heartbeat plus a staleness window is accurate enough here and needs no new
- * infrastructure.
- *
- * The important consequence: a tab that is closed or killed can never write
- * "offline", so `isOnline` must ALWAYS be read through `isUserOnline`, which
- * also checks how fresh `lastSeen` is.
- */
 
 const HEARTBEAT_MS = 60_000;
 
@@ -46,13 +33,7 @@ export function isUserOnline(
   return seen > 0 && now - seen < PRESENCE_STALE_MS;
 }
 
-/**
- * Begins the presence heartbeat for the signed-in user.
- *
- * Only beats while the tab is actually visible — a backgrounded tab should not
- * look "online". Returns a cleanup function that stops the heartbeat and marks
- * the user offline.
- */
+
 export function startPresence(uid: string): () => void {
   if (typeof window === "undefined") return () => undefined;
 
@@ -100,12 +81,7 @@ export function startPresence(uid: string): () => void {
   };
 }
 
-/**
- * Live online/offline flags for a set of users.
- *
- * One batched query rather than one listener per user. Callers should pass only
- * the users actually on screen — cap is 30.
- */
+
 export function subscribeToPresence(
   userIds: string[],
   callback: (presence: Map<string, boolean>) => void

@@ -14,13 +14,9 @@ export type SortDirection = "asc" | "desc";
 
 export interface Page<T> {
   items: T[];
-  /** Feed this to the next fetch. `null` once the list is exhausted. */
+
   cursor: QueryDocumentSnapshot | null;
-  /**
-   * `docs.length === pageSize` — a short page means the end. Note that a full
-   * page can still be the last one, in which case one more (empty) fetch is
-   * needed to discover that; callers should keep the button until a short page.
-   */
+ 
   hasMore: boolean;
 }
 

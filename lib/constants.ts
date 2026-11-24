@@ -1,8 +1,4 @@
-/**
- * One selectable branch/department. `value` is the stable code stored on the
- * profile (and used as the branch-chat room id / Firestore filter key),
- * `label` is what humans read.
- */
+
 export interface BranchOption {
   value: string;
   label: string;
@@ -13,14 +9,7 @@ export interface BranchGroup {
   options: BranchOption[];
 }
 
-/**
- * Branches grouped by faculty so ~80 options stay navigable.
- *
- * `value` doubles as the branch-chat room id and the Firestore filter key
- * (`where("branch", "==", ...)`), so codes must be short, unique and STABLE —
- * never rename one once shipped. The six original engineering codes
- * (CSE, CSD, ECE, EEE, MECH, CIVIL) must stay as-is for existing profiles.
- */
+
 export const BRANCH_GROUPS: BranchGroup[] = [
   {
     label: "Engineering & Technology",

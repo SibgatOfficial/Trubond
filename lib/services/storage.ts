@@ -1,16 +1,3 @@
-/**
- * Cloudinary-backed file uploads (replaces Firebase Cloud Storage).
- *
- * Uploads are *unsigned*: the browser posts the file straight to Cloudinary
- * using a public cloud name plus an unsigned upload preset. No server and no
- * API secret are involved, which is required here because the app is built as
- * a static export (`output: "export"` in next.config.mjs) and therefore has no
- * backend available to sign requests.
- *
- * Required env vars (see `.env.local.example`):
- *   NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME     e.g. "trubond"
- *   NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET  e.g. "trubond_unsigned"
- */
 
 import {
   checkUpload,

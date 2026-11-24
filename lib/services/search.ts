@@ -9,18 +9,7 @@ import {
 import { db } from "@/lib/firebase";
 import type { EventItem, Note, Project, UserProfile } from "@/types";
 
-/**
- * Search sources.
- *
- * Two different strategies, deliberately:
- *
- *  - People use a real Firestore prefix range query (`username >= term` and
- *    `<= term + \uf8ff`), which is the one search Firestore can do natively
- *    with a plain single-field index.
- *  - Notes / projects / events are loaded into a capped pool once and filtered
- *    in the browser, because Firestore has no substring search and a range
- *    query on a title would only match from the first character.
- */
+
 
 export interface SearchPool {
   notes: Note[];
